@@ -1,0 +1,2699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>智能空调废热回收节能系统 · 数字孪生仿真实验台</title>
+<style>
+/* ============================================================
+   0. 设计令牌 —— 深色实验室风格
+   ============================================================ */
+:root{
+  --bg:#0a0e14;
+  --bg2:#111820;
+  --cyan:#00d4ff;
+  --orange:#ff6b35;
+  --txt:#d7e6f2;
+  --dim:#7c93a8;
+  --ok:#26e08a;
+  --warn:#ffb020;
+  --err:#ff4d4f;
+  --glass:rgba(17,25,37,.62);
+  --glass2:rgba(12,19,28,.55);
+  --line:rgba(0,212,255,.16);
+  --mono:'JetBrains Mono','Cascadia Mono','SFMono-Regular','Consolas','Menlo',monospace;
+  --sans:'PingFang SC','Microsoft YaHei','Segoe UI',system-ui,sans-serif;
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:var(--sans);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* 等宽数字 */
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+
+/* ============================================================
+   1. 总体布局：顶栏 / 主区（3D 65% + 面板 35%）/ 底栏
+   ============================================================ */
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+/* ---------- 顶部标题栏 ---------- */
+#topbar{
+  height:58px;flex:0 0 58px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;position:relative;z-index:20;
+  background:linear-gradient(180deg,rgba(15,23,34,.96),rgba(10,14,20,.86));
+  border-bottom:1px solid rgba(0,212,255,.18);
+  box-shadow:0 6px 26px rgba(0,0,0,.55),0 1px 0 rgba(0,212,255,.10) inset;
+}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand .logo{width:30px;height:30px;flex:0 0 30px}
+.brand h1{
+  font-size:19px;font-weight:700;letter-spacing:1px;white-space:nowrap;
+  background:linear-gradient(90deg,#eaf6ff 0%,#7fe4ff 45%,#ff9a5c 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.brand .sub{
+  font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:1.4px;
+  border-left:1px solid rgba(255,255,255,.12);padding-left:12px;white-space:nowrap;
+}
+.top-right{display:flex;align-items:center;gap:16px}
+.pill{
+  display:flex;align-items:center;gap:8px;height:32px;padding:0 14px;border-radius:16px;
+  background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.22);
+  font-size:12px;font-family:var(--mono);letter-spacing:.6px;
+}
+.lamp{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok),0 0 22px var(--ok);animation:blink 2.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
+.lamp.warn{background:var(--warn);box-shadow:0 0 10px var(--warn),0 0 22px var(--warn)}
+.lamp.err{background:var(--err);box-shadow:0 0 12px var(--err),0 0 26px var(--err);animation:fastblink .7s infinite}
+@keyframes fastblink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(1.35)}}
+#bell{margin-right:6px;opacity:.25;transition:opacity .2s}
+#bell.on{opacity:1;animation:shake .5s infinite}
+@keyframes shake{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(12deg)}}
+.clock{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+.clock b{font-family:var(--mono);font-size:15px;color:#e9f6ff}
+.clock span{font-family:var(--mono);font-size:10px;color:var(--dim)}
+
+/* 中英文切换器 */
+.langsw{
+  display:flex;align-items:center;gap:2px;height:32px;padding:3px;border-radius:16px;
+  background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.22);
+}
+.langsw button{
+  appearance:none;-webkit-appearance:none;border:0;background:transparent;cursor:pointer;
+  height:24px;padding:0 11px;border-radius:13px;transition:background .2s,color .2s,box-shadow .2s;
+  font-family:var(--mono);font-size:12px;line-height:1;letter-spacing:.4px;color:var(--dim);
+}
+.langsw button:hover{color:#9fe8ff}
+.langsw button.on{
+  color:#eaf7ff;background:linear-gradient(180deg,rgba(0,212,255,.32),rgba(0,212,255,.14));
+  box-shadow:0 0 12px rgba(0,212,255,.35) inset,0 0 8px rgba(0,212,255,.2);
+}
+@media (max-width:1180px){ .top-right{gap:10px} }
+
+/* ---------- 主区 ---------- */
+#main{flex:1 1 auto;display:flex;min-height:0;position:relative}
+#stage{position:relative;flex:0 0 65%;width:65%;min-width:0;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#131c28 0%,#0a0e14 72%)}
+#scene{display:block;width:100%;height:100%}
+.vignette{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%);}
+.scan{position:absolute;inset:0;pointer-events:none;opacity:.28;
+  background:repeating-linear-gradient(0deg,rgba(0,212,255,.05) 0 1px,transparent 1px 3px)}
+
+/* ---------- 右侧数据面板 ---------- */
+#panel{
+  flex:1 1 35%;width:35%;min-width:0;padding:14px;overflow-y:auto;overflow-x:hidden;
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start;
+  background:linear-gradient(180deg,rgba(13,19,29,.92),rgba(9,13,20,.96));
+  border-left:1px solid rgba(0,212,255,.14);
+}
+#panel::-webkit-scrollbar{width:8px}
+#panel::-webkit-scrollbar-thumb{background:rgba(0,212,255,.22);border-radius:8px}
+#panel::-webkit-scrollbar-track{background:rgba(255,255,255,.03)}
+
+/* ---------- 侧栏收起 / 展开手柄 ---------- */
+#stage,#panel{transition:flex-basis .38s cubic-bezier(.4,0,.2,1),width .38s cubic-bezier(.4,0,.2,1),
+  height .38s cubic-bezier(.4,0,.2,1),padding .38s cubic-bezier(.4,0,.2,1),opacity .26s ease}
+#ctrl,#legend{transition:opacity .26s ease,transform .38s cubic-bezier(.4,0,.2,1)}
+.handle{
+  position:absolute;top:50%;z-index:22;padding:0;width:20px;height:66px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  appearance:none;-webkit-appearance:none;outline:none;font:inherit;line-height:0;
+  transform:translateY(-50%);
+  background:linear-gradient(180deg,rgba(0,212,255,.14),rgba(8,14,22,.88));
+  border:1px solid rgba(0,212,255,.26);color:#9fe8ff;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  transition:background .2s,box-shadow .2s,border-color .2s,color .2s;
+}
+.handle:hover{background:linear-gradient(180deg,rgba(0,212,255,.32),rgba(8,14,22,.92));
+  border-color:rgba(0,212,255,.6);color:#eaf7ff;box-shadow:0 0 16px rgba(0,212,255,.4)}
+.handle:active{transform:translateY(-50%) scale(.94)}
+.handle svg{width:13px;height:13px;display:block;transition:transform .38s cubic-bezier(.4,0,.2,1)}
+.handle.left{left:0;border-left:none;border-radius:0 10px 10px 0}
+.handle.right{right:0;border-right:none;border-radius:10px 0 0 10px}
+/* 箭头指向"收起后面板退去的方向" */
+.handle.left svg{transform:rotate(180deg)}
+#stage.hud-off .handle.left svg{transform:rotate(0deg)}
+#main.panel-off .handle.right svg{transform:rotate(180deg)}
+/* 左侧：控制台 / 图例浮层收起 */
+#stage.hud-off #ctrl{opacity:0;transform:translateX(-118%) scale(.96);pointer-events:none}
+#stage.hud-off #legend{opacity:0;transform:translateX(118%) scale(.96);pointer-events:none}
+/* 右侧：数据面板收起，3D 舞台铺满 */
+#main.panel-off #panel{flex:0 0 0;width:0;padding-left:0;padding-right:0;
+  border-left-color:transparent;opacity:0;pointer-events:none;overflow:hidden}
+#main.panel-off #stage{flex-basis:100%;width:100%}
+
+/* ---------- 玻璃卡片 ---------- */
+.card{
+  position:relative;padding:12px 13px;border-radius:var(--r);
+  background:linear-gradient(158deg,var(--glass) 0%,var(--glass2) 100%);
+  border:1px solid var(--line);
+  box-shadow:0 0 0 1px rgba(255,255,255,.02) inset,0 0 18px rgba(0,212,255,.07),0 8px 24px rgba(0,0,0,.35);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+  overflow:hidden;
+}
+.card::before{content:'';position:absolute;left:0;top:0;width:100%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,212,255,.55),transparent)}
+.card.wide{grid-column:span 2}
+.card.heat::after{content:'';position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,107,53,.18),transparent 70%);pointer-events:none}
+.c-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.c-title{font-size:12px;color:var(--dim);letter-spacing:1px;font-family:var(--mono);text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.c-en{font-size:9px;color:rgba(124,147,168,.55);letter-spacing:1.2px;font-family:var(--mono)}
+.row{display:flex;align-items:flex-end;gap:8px}
+.big{font-family:var(--mono);font-size:clamp(28px,2.7vw,42px);font-weight:700;line-height:1;color:#eaf7ff;
+  text-shadow:0 0 14px rgba(0,212,255,.35)}
+.big.o{color:#ffd0b6;text-shadow:0 0 14px rgba(255,107,53,.45)}
+.unit{font-family:var(--mono);font-size:13px;color:var(--dim);padding-bottom:3px}
+.tag{margin-left:auto;font-family:var(--mono);font-size:10px;padding:3px 7px;border-radius:5px;letter-spacing:.5px;
+  border:1px solid rgba(255,255,255,.14);color:var(--dim)}
+.tag.ok{color:var(--ok);border-color:rgba(38,224,138,.4);background:rgba(38,224,138,.08)}
+.tag.warn{color:var(--warn);border-color:rgba(255,176,32,.4);background:rgba(255,176,32,.08)}
+.tag.err{color:var(--err);border-color:rgba(255,77,79,.42);background:rgba(255,77,79,.10)}
+.tag.run{color:var(--cyan);border-color:rgba(0,212,255,.42);background:rgba(0,212,255,.09)}
+
+/* 进度条 */
+.bar{position:relative;height:8px;border-radius:6px;background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.06);overflow:hidden;margin-top:9px}
+.bar i{position:absolute;left:0;top:0;height:100%;width:0%;border-radius:6px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.bar .g1{background:linear-gradient(90deg,#00d4ff,#4affd0)}
+.bar .g2{background:linear-gradient(90deg,#00d4ff,#ffb020 55%,#ff6b35)}
+.bar .g3{background:linear-gradient(90deg,#0a5fa8,#00d4ff)}
+.bar .g4{background:linear-gradient(90deg,#26e08a,#c6ff4f)}
+.bar .mark{position:absolute;top:-2px;bottom:-2px;width:2px;background:rgba(255,255,255,.55);box-shadow:0 0 6px #fff}
+.mini{margin-top:8px;display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--dim)}
+canvas.chart{display:block;width:100%;height:56px;margin-top:8px}
+
+/* 水位竖条 */
+.level-box{display:flex;gap:12px;align-items:stretch}
+.vbar{position:relative;width:28px;flex:0 0 28px;height:96px;border-radius:8px;overflow:hidden;
+  background:rgba(255,255,255,.06);border:1px solid rgba(0,212,255,.22);box-shadow:0 0 12px rgba(0,212,255,.15) inset}
+.vbar i{position:absolute;left:0;bottom:0;width:100%;height:80%;
+  background:linear-gradient(0deg,#0050a8,#0090ff 45%,#7fe6ff);transition:height .5s cubic-bezier(.4,0,.2,1)}
+.vbar i.low{background:linear-gradient(0deg,#7a1414,#ff4d4f)}
+.vbar .mk{position:absolute;left:0;right:0;bottom:20%;height:1px;background:#ff4d4f;box-shadow:0 0 6px #ff4d4f}
+.vbar .wave{position:absolute;left:0;right:0;bottom:0;height:8px;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.35) 0 6px,transparent 6px 12px);animation:wave 2.4s linear infinite}
+@keyframes wave{to{background-position-x:12px}}
+.lvinfo{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px}
+/* 数值与单位必须同行、不换行，否则 % 会被挤到第二行被卡片裁掉 */
+.lvinfo .lvrow{display:flex;align-items:baseline;gap:4px;white-space:nowrap}
+.lvinfo .lv{font-family:var(--mono);font-size:clamp(20px,1.9vw,26px);font-weight:700;color:#d8f3ff;line-height:1}
+.lvinfo .unit{flex:0 0 auto;padding-bottom:0}
+.lvinfo small{font-family:var(--mono);font-size:10px;color:var(--dim);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 设备状态列表 */
+.devs{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:4px}
+.dev{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
+.dev .name{font-size:11.5px;color:#cfe3f2;line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dev .name em{display:block;font-style:normal;font-family:var(--mono);font-size:9px;color:var(--dim)}
+.led{width:8px;height:8px;border-radius:50%;background:#33424f;flex:0 0 8px}
+.led.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.led.run{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.led.warn{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.led.err{background:var(--err);box-shadow:0 0 9px var(--err);animation:fastblink .7s infinite}
+.dev .st{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+.dev .st.on{color:var(--cyan)}.dev .st.err{color:var(--err)}.dev .st.warn{color:var(--warn)}
+
+/* ---------- 左下浮动控制台 ---------- */
+#ctrl{
+  position:absolute;left:22px;bottom:22px;width:302px;z-index:12;padding:14px 14px 12px;
+  border-radius:14px;background:linear-gradient(158deg,rgba(18,27,40,.82),rgba(11,17,25,.76));
+  border:1px solid rgba(0,212,255,.2);backdrop-filter:blur(11px);
+  box-shadow:0 0 0 1px rgba(255,255,255,.03) inset,0 0 22px rgba(0,212,255,.10),0 14px 34px rgba(0,0,0,.5);
+}
+#ctrl::before{content:'';position:absolute;left:0;top:0;width:100%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,212,255,.6),transparent)}
+.ctrl-head{display:flex;align-items:center;gap:8px;font-size:12.5px;letter-spacing:1px;color:#dff1ff;margin-bottom:12px}
+.ctrl-head .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.ctrl-head .en{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:1.2px}
+.ctrl-row{margin-bottom:11px}
+.ctrl-row label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);margin-bottom:6px}
+.ctrl-row label b{font-family:var(--mono);font-size:12px;color:var(--cyan);font-weight:600}
+.ctrl-row label b.o{color:var(--orange)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:4px;outline:none;
+  background:linear-gradient(90deg,#00d4ff,#ff6b35);box-shadow:0 0 10px rgba(0,212,255,.25)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+  background:#eaf9ff;border:2px solid #00d4ff;box-shadow:0 0 10px rgba(0,212,255,.8);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#eaf9ff;border:2px solid #00d4ff;cursor:pointer}
+input[type=range]:disabled{filter:grayscale(.7);opacity:.5}
+.btns{display:flex;gap:8px;margin-bottom:8px}
+.btn{
+  flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:11.5px;letter-spacing:.5px;
+  font-family:var(--sans);color:#cfe6f5;border:1px solid rgba(0,212,255,.28);
+  background:linear-gradient(180deg,rgba(0,212,255,.14),rgba(0,212,255,.05));
+  transition:.18s;
+}
+.btn:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,212,255,.28);color:#fff}
+.btn.primary{background:linear-gradient(180deg,rgba(38,224,138,.22),rgba(38,224,138,.06));border-color:rgba(38,224,138,.45);color:#bdf6d9}
+.btn.primary:hover{box-shadow:0 0 14px rgba(38,224,138,.35)}
+.btn.off{background:linear-gradient(180deg,rgba(255,77,79,.20),rgba(255,77,79,.05));border-color:rgba(255,77,79,.42);color:#ffc4c5}
+.btn.ghost{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.10);color:var(--dim)}
+.btn.ghost:hover{color:#fff}
+.btn.active{background:linear-gradient(180deg,rgba(255,107,53,.24),rgba(255,107,53,.06));border-color:rgba(255,107,53,.5);color:#ffd7c4}
+.btn:disabled{opacity:.42;cursor:not-allowed;box-shadow:none}
+.ctrl-note{margin-top:8px;font-size:10.5px;line-height:1.5;color:rgba(124,147,168,.85)}
+
+/* ---------- 图例 ---------- */
+#legend{position:absolute;right:16px;bottom:18px;z-index:11;padding:9px 11px;border-radius:10px;
+  background:rgba(11,17,25,.6);border:1px solid rgba(0,212,255,.14);backdrop-filter:blur(8px);
+  font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.9}
+#legend i{display:inline-block;width:16px;height:2px;margin-right:7px;vertical-align:middle;border-radius:2px}
+
+/* ---------- 组件提示卡 ---------- */
+#tip{
+  position:absolute;z-index:14;min-width:228px;max-width:270px;padding:11px 12px;border-radius:11px;pointer-events:none;
+  background:linear-gradient(158deg,rgba(20,30,44,.94),rgba(11,17,25,.9));
+  border:1px solid rgba(0,212,255,.32);backdrop-filter:blur(10px);
+  box-shadow:0 0 20px rgba(0,212,255,.18),0 12px 30px rgba(0,0,0,.5);
+  opacity:0;transform:translateY(6px) scale(.98);transition:opacity .18s,transform .18s;
+}
+#tip.show{opacity:1;transform:translateY(0) scale(1)}
+#tip h4{font-size:12.5px;color:#eaf7ff;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+#tip h4 .bar3{width:3px;height:12px;background:var(--cyan);border-radius:2px;box-shadow:0 0 8px var(--cyan)}
+#tip .desc{font-size:10.5px;line-height:1.55;color:var(--dim);margin-bottom:8px}
+#tip .kv{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:11px;padding:3px 0;
+  border-top:1px dashed rgba(255,255,255,.07)}
+#tip .kv span{color:var(--dim)}
+#tip .kv b{color:#d8f2ff;font-weight:600}
+#tip .kv b.hot{color:var(--orange)}
+#tip .kv b.err{color:var(--err)}
+#tip .kv b.warn{color:var(--warn)}
+
+/* ---------- 报警横幅 ---------- */
+#alarm{
+  position:absolute;left:50%;top:14px;transform:translate(-50%,-140%);z-index:16;
+  display:flex;align-items:center;gap:10px;padding:9px 16px;border-radius:10px;
+  background:linear-gradient(90deg,rgba(255,77,79,.22),rgba(255,77,79,.10));
+  border:1px solid rgba(255,77,79,.5);color:#ffd6d6;font-size:12px;letter-spacing:.4px;
+  box-shadow:0 0 26px rgba(255,77,79,.35);transition:transform .35s cubic-bezier(.4,0,.2,1);white-space:nowrap;
+}
+#alarm.show{transform:translate(-50%,0)}
+#alarmBox.red .pulse{position:absolute;inset:0;pointer-events:none;z-index:13;animation:pulsered 1.4s infinite}
+@keyframes pulsered{0%,100%{box-shadow:inset 0 0 0 rgba(255,77,79,0)}50%{box-shadow:inset 0 0 120px rgba(255,77,79,.35)}}
+
+/* ---------- 底部状态栏 ---------- */
+#statusbar{
+  height:46px;flex:0 0 46px;display:flex;align-items:center;gap:0;position:relative;z-index:20;
+  background:linear-gradient(180deg,rgba(10,15,22,.9),rgba(14,21,31,.98));
+  border-top:1px solid rgba(0,212,255,.16);font-size:11.5px;
+}
+.fitem{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;position:relative;
+  font-family:var(--mono);color:var(--dim);letter-spacing:.5px;white-space:nowrap}
+.fitem + .fitem::before{content:'';position:absolute;left:0;top:22%;height:56%;width:1px;background:rgba(0,212,255,.14)}
+.fitem b{font-family:var(--mono);font-size:14px;color:#e8f6ff;font-weight:600}
+.fitem b.o{color:#ffc39f}
+.fitem .hint{font-size:9px;color:rgba(124,147,168,.7);border:1px solid rgba(255,255,255,.12);padding:1px 4px;border-radius:4px}
+
+/* ---------- 加载 / 错误遮罩 ---------- */
+#boot{position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;background:var(--bg);color:var(--cyan);font-family:var(--mono);font-size:13px;letter-spacing:2px}
+#boot .ring{width:44px;height:44px;border-radius:50%;border:2px solid rgba(0,212,255,.18);border-top-color:var(--cyan);
+  animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#boot.hide{opacity:0;pointer-events:none;transition:opacity .5s}
+#boot small{color:var(--dim);letter-spacing:1px;font-size:11px;max-width:70%;text-align:center;line-height:1.7}
+
+/* ============================================================
+   2. 响应式：1920×1080 / 1600 / 1366×768 / 窄屏
+   ============================================================ */
+@media (max-height:820px){
+  .card{padding:10px 11px}
+  .big{font-size:30px}
+  canvas.chart{height:46px}
+  .vbar{height:84px}
+  #ctrl{width:284px;bottom:16px;left:16px;padding:12px}
+  .ctrl-note{display:none}
+}
+@media (max-width:1600px){
+  #panel{padding:11px;gap:10px}
+  .brand h1{font-size:17px}
+  .brand .sub{display:none}
+}
+@media (max-width:1440px){
+  .brand h1{font-size:16px}
+  .card{padding:10px}
+  .c-title{font-size:11px}
+  .big{font-size:28px}
+  #ctrl{width:270px}
+  #legend{display:none}
+}
+@media (max-width:1180px){
+  #main{flex-direction:column}
+  #stage{flex:0 0 52%;width:100%}
+  #panel{flex:1 1 48%;width:100%;border-left:none;border-top:1px solid rgba(0,212,255,.14)}
+  .brand .sub,#clockBox span{display:none}
+  /* 堆叠布局下改为上下收放，手柄转到底部居中 */
+  #main.panel-off #panel{flex:0 0 0;height:0;width:100%;padding-top:0;padding-bottom:0;
+    border-left:none;border-top-color:transparent;min-height:0}
+  #main.panel-off #stage{flex:1 1 100%;height:100%}
+  .handle.right{top:auto;bottom:0;left:50%;right:auto;width:66px;height:20px;
+    transform:translateX(-50%);border-right:1px solid rgba(0,212,255,.26);border-bottom:none;border-radius:10px 10px 0 0}
+  .handle.right:active{transform:translateX(-50%) scale(.94)}
+  .handle.right svg{transform:rotate(90deg)}
+  #main.panel-off .handle.right svg{transform:rotate(-90deg)}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- ============================ 顶部标题栏 ============================ -->
+  <header id="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="17" stroke="#00d4ff" stroke-width="1.6" opacity=".55"/>
+        <circle cx="20" cy="20" r="12" stroke="#ff6b35" stroke-width="1.4" opacity=".7"/>
+        <path d="M20 7c-4 4-4 8 0 13s4 9 0 13" stroke="#00d4ff" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="20" cy="20" r="3.2" fill="#00d4ff"/>
+      </svg>
+      <h1>智能空调废热回收节能系统</h1>
+      <span class="sub">STM32F103 · DIGITAL TWIN LAB</span>
+    </div>
+    <div class="top-right">
+      <!-- 蜂鸣器图标（干烧报警闪烁） -->
+      <svg id="bell" width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <path d="M6 16a6 6 0 1 1 12 0c0 2.2.8 3 1.5 3.6H4.5C5.2 19 6 18.2 6 16Z" stroke="#ff4d4f" stroke-width="1.5"/>
+        <path d="M10 20.2a2.4 2.4 0 0 0 4 0" stroke="#ff4d4f" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="12" cy="6" r="1.3" fill="#ff4d4f"/>
+      </svg>
+      <div class="pill"><i class="lamp" id="lamp"></i><span id="lampTxt">系统正常</span></div>
+      <!-- 中 / 英 双语切换 -->
+      <div class="langsw" id="langSw" title="语言切换 / Language">
+        <button type="button" data-lang="zh" class="on">中文</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <div class="clock" id="clockBox">
+        <b id="clkTime">--:--:--</b>
+        <span id="clkDate">----/--/--</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================ 主区 ============================ -->
+  <div id="main">
+    <!-- ---------- 3D 舞台（约 65%） ---------- -->
+    <div id="stage" id2="stage">
+      <canvas id="scene"></canvas>
+      <div class="scan"></div>
+      <div class="vignette"></div>
+      <div id="alarmBox" style="position:absolute;inset:0;pointer-events:none"><div class="pulse"></div></div>
+
+      <div id="alarm">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3 1.5 21h21L12 3Z" stroke="#ff4d4f" stroke-width="1.6"/><path d="M12 9v5" stroke="#ff4d4f" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="17.4" r="1.1" fill="#ff4d4f"/></svg>
+        <span id="alarmTxt">干烧保护触发：水位低于 20%，水泵与陶瓷片已断电</span>
+      </div>
+
+      <!-- 组件悬停 / 选中提示卡 -->
+      <div id="tip"></div>
+
+      <!-- 图例 -->
+      <div id="legend">
+        <div><i style="background:#ff6b35;box-shadow:0 0 8px #ff6b35"></i>废热传导 HEAT</div>
+        <div><i style="background:#00d4ff;box-shadow:0 0 8px #00d4ff"></i>水循环 WATER</div>
+        <div><i style="background:#a86bff;box-shadow:0 0 8px #a86bff"></i>控制指令 CTRL</div>
+        <div><i style="background:#26e08a;box-shadow:0 0 8px #26e08a"></i>传感器回传 SENSOR</div>
+        <div><i style="background:#ffd24a;box-shadow:0 0 8px #ffd24a"></i>12V 直流供电 DC</div>
+      </div>
+
+      <!-- 左下浮动交互控制台 -->
+      <div id="ctrl">
+        <div class="ctrl-head"><span class="dot"></span>交互控制台<span class="en">CONTROL</span></div>
+        <div class="ctrl-row">
+          <label>废热产生量 · 压缩机负载 <b id="vHeat">70%</b></label>
+          <input id="sHeat" type="range" min="20" max="100" step="1" value="70" />
+        </div>
+        <div class="ctrl-row">
+          <label>热水需求温度 · 目标值 <b class="o" id="vSet">55.0 °C</b></label>
+          <input id="sSet" type="range" min="35" max="75" step="1" value="55" />
+        </div>
+        <div class="btns">
+          <button id="btnPower" class="btn primary">■ 停止运行</button>
+          <button id="btnAuto" class="btn active">自动模式</button>
+        </div>
+        <div class="btns">
+          <button id="btnPump" class="btn ghost" disabled>循环水泵</button>
+          <button id="btnFan" class="btn ghost" disabled>散热风扇</button>
+        </div>
+        <div class="btns">
+          <button id="btnWater" class="btn ghost">⟳ 水箱补水</button>
+          <button id="btnDry" class="btn ghost">⚠ 模拟缺水</button>
+        </div>
+        <div class="btns" style="margin-bottom:4px">
+          <button id="btnBaffle" class="btn active" title="第二轮优化①：水箱内置导流板，消除储水循环死角（首轮 η 仅 58.5%）">导流板 ★</button>
+          <button id="btnFanOpt" class="btn active" title="第二轮优化②：高废热工况下风扇散热强化">风扇优化 ★</button>
+        </div>
+        <div class="ctrl-note">★ 为第二轮优化整改项，关闭可复现首轮测试工况。拖拽旋转视角 / 滚轮缩放 · 悬停或点击 3D 组件查看实时工况；空闲 12s 后自动进入设备巡览。快捷键 [ / ] 收起两侧面板，突出 3D。</div>
+      </div>
+
+      <!-- 左侧浮层（控制台 / 图例）收起·展开 -->
+      <button id="hudToggle" class="handle left" type="button" data-noi18n title="收起左侧浮层">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <!-- 右侧数据面板 收起·展开 -->
+      <button id="panelToggle" class="handle right" type="button" data-noi18n title="收起右侧面板">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <!-- ---------- 右侧数据面板（约 35%） ---------- -->
+    <aside id="panel">
+      <!-- 1. 水箱温度 -->
+      <section class="card wide">
+        <div class="c-head"><span class="c-title">水箱温度 / TANK</span><span class="c-en">TMP-01</span></div>
+        <div class="row">
+          <span class="big mono" id="tTank">32.0</span><span class="unit">°C</span>
+          <span class="tag" id="tagTank">升温中</span>
+        </div>
+        <div class="bar"><i class="g2" id="barTank"></i><span class="mark" id="markTank" title="目标温度"></span></div>
+        <canvas class="chart" id="cvTank"></canvas>
+        <div class="mini"><span>最近 30s 水温趋势</span><span id="tankRate">+0.0 °C/min</span></div>
+      </section>
+
+      <!-- 2. 陶瓷片温度 -->
+      <section class="card wide heat">
+        <div class="c-head"><span class="c-title">制冷陶瓷片温度 / TEC ARRAY</span><span class="c-en">TMP-02</span></div>
+        <div class="row">
+          <span class="big o mono" id="tCer">58.0</span><span class="unit">°C</span>
+          <span class="tag run" id="tagCer">废热注入</span>
+        </div>
+        <canvas class="chart" id="cvCer"></canvas>
+        <div class="mini"><span>最近 30s · 虚线 80°C 风扇阈值</span><span id="cerDiff">Δt 12.0 °C</span></div>
+      </section>
+
+      <!-- 3. 冷风温度 -->
+      <section class="card">
+        <div class="c-head"><span class="c-title">冷风出风 / COLD AIR</span><span class="c-en">TMP-03</span></div>
+        <div class="row"><span class="big mono" id="tCold">14.0</span><span class="unit">°C</span></div>
+        <div class="bar"><i class="g1" id="barCold"></i></div>
+        <div class="mini"><span>环境 <b class="mono" id="tAmb">26.0</b> °C</span><span id="coldDelta">Δ -12.0</span></div>
+      </section>
+
+      <!-- 4. 水位 -->
+      <section class="card">
+        <div class="c-head"><span class="c-title">水位 / LEVEL</span><span class="c-en">LV-01</span></div>
+        <div class="level-box">
+          <div class="vbar"><i id="barLevel"></i><span class="mk"></span><span class="wave"></span></div>
+          <div class="lvinfo">
+            <div class="lvrow"><span class="lv mono" id="vLevel">82.0</span><span class="unit">%</span></div>
+            <small id="levelTxt">正常 · 有效容积 34.6 L</small>
+            <small style="color:var(--err)">干烧保护阈值 20%</small>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. 废热回收效率 -->
+      <section class="card wide">
+        <div class="c-head"><span class="c-title">废热回收效率 / HEAT RECOVERY η</span><span class="c-en">CALC-01</span></div>
+        <div class="row">
+          <span class="big mono" id="vEff">65.2</span><span class="unit">%</span>
+          <span class="tag ok" id="badgeEff">达标 ≥60%</span>
+        </div>
+        <div class="bar"><i class="g4" id="barEff"></i><span class="mark" style="left:60%"></span></div>
+        <div class="mini"><span>热回收功率 <b class="mono" id="vPower">0.86</b> kW</span><span id="effCmp">优化前 58.5% → 优化后 65.2%</span></div>
+      </section>
+
+      <!-- 6. 响应时间 + 数据延迟 -->
+      <section class="card wide">
+        <div class="c-head"><span class="c-title">实时性指标 / REAL-TIME</span><span class="c-en">PERF-01</span></div>
+        <div class="row" style="margin-bottom:2px">
+          <span style="width:96px;font-size:11.5px;color:var(--dim)">执行部件响应</span>
+          <span class="big mono" style="font-size:22px;color:#eaf7ff" id="vResp">520</span><span class="unit">ms</span>
+          <span class="tag ok" id="badgeResp">达标 ≤1s</span>
+        </div>
+        <div class="bar"><i class="g4" id="barResp"></i><span class="mark" style="left:70%"></span></div>
+        <div class="row" style="margin:9px 0 2px">
+          <span style="width:96px;font-size:11.5px;color:var(--dim)">数据处理延迟</span>
+          <span class="big mono" style="font-size:22px;color:#eaf7ff" id="vLat">158</span><span class="unit">ms</span>
+          <span class="tag ok" id="badgeLat">达标 ≤500ms</span>
+        </div>
+        <div class="bar"><i class="g1" id="barLat"></i><span class="mark" style="left:36%"></span></div>
+      </section>
+
+      <!-- 7. 设备状态矩阵 -->
+      <section class="card wide">
+        <div class="c-head"><span class="c-title">设备状态矩阵 / DEVICE MATRIX</span><span class="c-en">MCU · PSU · GPIO</span></div>
+        <div class="devs">
+          <div class="dev"><i class="led" id="ledMcu"></i><div class="name">STM32F103 主控<em>MCU-F103</em></div><div class="st" id="stMcu">运行</div></div>
+          <div class="dev"><i class="led" id="ledPsu"></i><div class="name">12V 电源 180W<em>PSU-01</em></div><div class="st" id="stPsu">供电</div></div>
+          <div class="dev"><i class="led" id="ledRel"></i><div class="name">隔离驱动继电器<em>RLY-ISO</em></div><div class="st" id="stRel">就绪</div></div>
+          <div class="dev"><i class="led" id="ledCer"></i><div class="name">制冷陶瓷片 ×2<em>TEC PWR</em></div><div class="st" id="stCer">待机</div></div>
+          <div class="dev"><i class="led" id="ledPump"></i><div class="name">循环水泵<em>PUMP-01</em></div><div class="st" id="stPump">停止</div></div>
+          <div class="dev"><i class="led" id="ledFan"></i><div class="name">散热风扇 ×2<em>FAN-01/02</em></div><div class="st" id="stFan">停止</div></div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- ============================ 底部状态栏 ============================ -->
+  <footer id="statusbar">
+    <div class="fitem">运行模式 <b id="fMode">自动</b></div>
+    <div class="fitem">今日累计回收热量 <b class="o" id="fHeat">12.60</b> kWh</div>
+    <div class="fitem">预估节省电费 <b class="o" id="fMoney">7.31</b> 元</div>
+    <div class="fitem">连续运行时长 <b id="fUp">168h 00m</b><span class="hint">仿真×60</span></div>
+  </footer>
+</div>
+
+<!-- 启动遮罩 -->
+<div id="boot">
+  <div class="ring"></div>
+  <div id="bootTxt">正在加载 Three.js 运行时 …</div>
+  <small id="bootSub">若长时间停留，请检查网络后刷新（需访问 CDN）</small>
+</div>
+
+<!-- ============================================================
+     3. Three.js CDN（多源回退：unpkg → jsDelivr → Staticfile）
+     ============================================================ -->
+<script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
+<script>window.THREE||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"><\/script>');</script>
+<script>window.THREE||document.write('<script src="https://cdn.staticfile.org/three.js/0.150.1/three.min.js"><\/script>');</script>
+
+<script>
+/* ============================================================================
+ *  智能空调废热回收节能系统 · 数字孪生仿真
+ *  架构：感知层(传感器) → 控制层(STM32F103) → 执行层(继电器/泵/风扇/陶瓷片)
+ *  全部逻辑运行于浏览器端，无后端依赖
+ * ========================================================================== */
+(function () {
+'use strict';
+
+var bootEl = document.getElementById('boot');
+if (!window.THREE) {
+  document.getElementById('bootTxt').textContent = TR('Three.js 加载失败');
+  document.getElementById('bootSub').textContent =
+    TR('本页通过 CDN 引入 Three.js，请连接网络后刷新；或将 three.min.js 下载到本地并修改 <script> 的 src 路径。');
+  bootEl.querySelector('.ring').style.display = 'none';
+  return;
+}
+
+/* ============================================================================
+ * 0. 工具函数
+ * ========================================================================== */
+var $ = function (id) { return document.getElementById(id); };
+var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+var lerp = function (a, b, t) { return a + (b - a) * t; };
+var rnd = function (a, b) { return a + Math.random() * (b - a); };
+var pad2 = function (n) { return n < 10 ? '0' + n : '' + n; };
+var nowSec = 0; // 页面运行秒数（真实时间）
+
+/* ============================================================================
+ * 0.5 双语支持 / BILINGUAL (ZH ⇄ EN)
+ *   静态 DOM 文案：首次遍历缓存中文原文 → 之后按当前语言回填（无需改动 HTML）
+ *   动态文案：统一用 t() 包裹 → 切换语言后重绘即可
+ * ========================================================================== */
+var LANG = 'zh';
+try {
+  var _lg = localStorage.getItem('whr.lang');
+  if (_lg === 'zh' || _lg === 'en') LANG = _lg;
+} catch (e) { }
+
+var DICT = {
+  /* ---------- 标题栏 / 全局 ---------- */
+  '智能空调废热回收节能系统 · 数字孪生仿真实验台': 'Smart AC Waste-Heat Recovery System · Digital-Twin Simulation Bench',
+  '智能空调废热回收节能系统': 'Smart AC Waste-Heat Recovery System',
+  '交互控制台': 'Control Console',
+  '系统正常': 'System Normal',
+  '正在加载 Three.js 运行时 …': 'Loading Three.js runtime …',
+  '若长时间停留，请检查网络后刷新（需访问 CDN）': 'If this persists, check your network and refresh (CDN access required)',
+  'Three.js 加载失败': 'Three.js failed to load',
+  '3D 初始化失败': '3D initialization failed',
+  '原因：': 'Cause: ',
+  '。请确认浏览器已启用 WebGL（chrome://gpu）后刷新。': '. Please enable WebGL in your browser (chrome://gpu) and refresh.',
+  '本页通过 CDN 引入 Three.js，请连接网络后刷新；或将 three.min.js 下载到本地并修改 <script> 的 src 路径。':
+    'This page loads Three.js from a CDN. Check your connection and refresh, or save three.min.js locally and update the src path.',
+
+  /* ---------- 图例 ---------- */
+  '废热传导 HEAT': 'Heat Conduction',
+  '水循环 WATER': 'Water Loop',
+  '控制指令 CTRL': 'Control Command',
+  '传感器回传 SENSOR': 'Sensor Feedback',
+  '12V 直流供电 DC': '12V DC Power',
+
+  /* ---------- 侧栏收起 / 展开 ---------- */
+  '收起左侧浮层': 'Hide left overlay',
+  '展开左侧浮层': 'Show left overlay',
+  '收起右侧面板': 'Collapse data panel',
+  '展开右侧面板': 'Expand data panel',
+
+  /* ---------- 报警横幅 ---------- */
+  '干烧保护触发：水位低于 20%，水泵与陶瓷片已断电': 'Dry-fire protection: level below 20%, pump and TEC modules de-energized',
+  '干烧保护触发：水位 ': 'Dry-fire protection: level ',
+  '% < 20%，循环水泵与制冷陶瓷片已断电，请补水后自动复位': '% < 20%: circulation pump and Peltier modules de-energized, refill to reset automatically',
+  '干烧保护！': 'DRY-FIRE PROTECTION!',
+  '干烧保护 · 立即补水': 'Dry-fire protection · refill now',
+  '干烧保护阈值 20%': 'Dry-fire threshold 20%',
+  '干烧故障 · 已停机': 'Dry-fire fault · stopped',
+  'ALARM 干烧保护': 'ALARM DRY-FIRE',
+
+  /* ---------- 控制台 ---------- */
+  '废热产生量 · 压缩机负载': 'Waste-heat input · compressor load',
+  '热水需求温度 · 目标值': 'Hot-water demand temp · setpoint',
+  '■ 停止运行': '■ Stop',
+  '▶ 启动运行': '▶ Start',
+  '自动模式': 'Auto Mode',
+  '手动模式': 'Manual Mode',
+  '循环水泵': 'Circulation Pump',
+  '散热风扇': 'Cooling Fan',
+  '⟳ 水箱补水': '⟳ Refill Tank',
+  '⚠ 模拟缺水': '⚠ Simulate Low Water',
+  '导流板 ★': 'Baffle ★',
+  '风扇优化 ★': 'Fan Opt ★',
+  '第二轮优化①：水箱内置导流板，消除储水循环死角（首轮 η 仅 58.5%）':
+    'Round-2 item ①: internal baffle plate removing circulation dead zone (round-1 η only 58.5%)',
+  '第二轮优化②：高废热工况下风扇散热强化':
+    'Round-2 item ②: enhanced fan cooling under high waste-heat load',
+  '★ 为第二轮优化整改项，关闭可复现首轮测试工况。拖拽旋转视角 / 滚轮缩放 · 悬停或点击 3D 组件查看实时工况；空闲 12s 后自动进入设备巡览。快捷键 [ / ] 收起两侧面板，突出 3D。':
+    '★ Round-2 corrective items — switch off to reproduce round-1 conditions. Drag to orbit / scroll to zoom; hover or click a 3D part for live status. Idle for 12 s starts the guided tour. Press [ / ] to collapse either side panel and focus on the 3D view.',
+
+  /* ---------- 数据卡片标题 ---------- */
+  '水箱温度 / TANK': 'Tank Temperature / TANK',
+  '制冷陶瓷片温度 / TEC ARRAY': 'TEC Temperature / TEC ARRAY',
+  '冷风出风 / COLD AIR': 'Cold Air Outlet / COLD AIR',
+  '水位 / LEVEL': 'Water Level / LEVEL',
+  '废热回收效率 / HEAT RECOVERY η': 'Heat Recovery η / HEAT RECOVERY',
+  '实时性指标 / REAL-TIME': 'Real-time Metrics / REAL-TIME',
+  '设备状态矩阵 / DEVICE MATRIX': 'Device Matrix / DEVICE MATRIX',
+  '最近 30s 水温趋势': 'Water temperature, last 30 s',
+  '最近 30s · 虚线 80°C 风扇阈值': 'Last 30 s · dashed line = 80 °C fan threshold',
+  '热回收功率': 'Recovery power',
+  '执行部件响应': 'Actuator response',
+  '数据处理延迟': 'Data processing latency',
+  '控制指令延迟': 'Control command latency',
+  '响应耗时': 'Response time',
+  '优化前 58.5% → 优化后 65.2%': '58.5% before → 65.2% after',
+  '优化后 65.2% 已达标': '65.2% after optimization, target met',
+  '首轮工况 58.5% 未达标': 'Round-1 condition 58.5%, below target',
+
+  /* ---------- 卡片内的动态短语 ---------- */
+  '升温中': 'Heating',
+  '蓄热升温中': 'Storing heat, heating up',
+  '保温静置': 'Holding, idle',
+  '已达设定温度': 'Setpoint reached',
+  '已达设定值': 'Setpoint reached',
+  '废热注入': 'Waste-heat injection',
+  '正常 · 有效容积 ': 'Normal · usable volume ',
+  '正常 · 有效容积 34.6 L': 'Normal · usable volume 34.6 L',
+  '水位偏低': 'Level low',
+  '达标 ≥60%': 'Pass ≥60%',
+  '未达标 <60%': 'Below target <60%',
+  '达标 ≤1s': 'Pass ≤1 s',
+  '超标 >1s': 'Over limit >1 s',
+  '达标 ≤500ms': 'Pass ≤500 ms',
+  '超标 >500ms': 'Over limit >500 ms',
+  '环境': 'Ambient',
+
+  /* ---------- 设备状态矩阵 ---------- */
+  'STM32F103 主控': 'STM32F103 MCU',
+  'STM32F103 主控板': 'STM32F103 Board',
+  'STM32F103 主控板 · MCU': 'STM32F103 Controller · MCU',
+  '12V 电源 180W': '12V PSU 180 W',
+  '12V / 180W 电源': '12V / 180W PSU',
+  '12V / 180W 电源适配器 · PSU': '12V / 180W Adapter · PSU',
+  '12V/180W 电源': '12V/180W PSU',
+  '隔离驱动继电器': 'Isolated Drive Relay',
+  '隔离驱动继电器 · ISO DRIVER': 'Isolated Drive Relay · ISO DRIVER',
+  '制冷陶瓷片 ×2': 'Peltier Module ×2',
+  '制冷陶瓷片 ×2 · TEC HEAT SOURCE': 'Peltier Module ×2 · TEC HEAT SOURCE',
+  '加热铝排 + 水冷头 · HEAT EXCHANGER': 'Fin Stack + Water Block · HEAT EXCHANGER',
+  '加热铝排 / 水冷头': 'Fin stack / Water block',
+  '储热水箱 · STORAGE TANK': 'Storage Tank · STORAGE TANK',
+  '储热水箱 40L': 'Storage Tank 40 L',
+  '循环水泵 · CIRCULATION PUMP': 'Circulation Pump · CIRCULATION PUMP',
+  '散热风扇 ×2': 'Cooling Fan ×2',
+  '散热风扇 ×2 · COOLING FAN': 'Cooling Fan ×2 · COOLING FAN',
+  '运行': 'RUN',
+  '运行中': 'Running',
+  '运行 ': 'Running ',
+  '停止': 'Stopped',
+  '待机': 'Standby',
+  '就绪': 'Ready',
+  '供电': 'Powering',
+  '运转 ×2': 'Running ×2',
+  '运转 2180rpm': 'Running 2180 rpm',
+  '运转 · Δt ': 'Running · Δt ',
+  '待命 <80°C': 'Standby <80 °C',
+  '主循环运行中': 'Main loop running',
+  '已停机': 'Shut down',
+  '保护': 'Protected',
+  '保护停机': 'Protection shutdown',
+  '保护断开': 'Tripped (open)',
+  '保护断电': 'De-energized by protection',
+  '断电': 'De-energized',
+  '断电保护': 'Power-cut protection',
+  '输出正常': 'Output normal',
+  '声光报警中': 'Audible & visual alarm',
+  '报警输出': 'Alarm output',
+  '驱动就绪': 'Driver ready',
+  '12V 通电运行中': '12V energized, running',
+  '空载待机': 'Idle standby',
+  '系统待机': 'System standby',
+  '停机': 'Stopped',
+
+  /* ---------- 组件说明（提示卡）---------- */
+  '模拟空调压缩机的废热产生端：通电后持续释放低品位废热，经导热硅胶垫均匀贴合至铜导热板，向下传导至加热铝排、向上被铝制水冷头回收。':
+    'Simulates the compressor as the waste-heat source: it releases low-grade heat continuously, spreads it through a thermal pad into the copper plate, conducting down to the fin stack and up into the aluminium water block for recovery.',
+  '系统核心热交换器。13 片鳍片放大换热面积，顶面铜导热板承接陶瓷片废热；上方阳极氧化铝制水冷头构成闭式水循环的一次侧，将热量带入蓄热水箱。':
+    'Core heat exchanger of the system. 13 fins enlarge the exchange area; the top copper plate receives TEC waste heat, while the anodised aluminium water block above forms the primary side of the closed water loop that carries heat into the storage tank.',
+  '容积 40L 保温水箱，储存回收得到的生活热水；水温、水位双参数实时监测，缺水时触发干烧保护。':
+    'Insulated 40 L tank storing recovered domestic hot water, monitoring both temperature and level, with dry-fire protection triggered on low water.',
+  '驱动水箱与铝排之间的闭式水循环，强化对流换热；由温差阈值自动启停。':
+    'Drives the closed water loop between tank and fin stack to intensify convective heat exchange, started and stopped automatically by temperature-difference thresholds.',
+  '陶瓷片超温时强制风冷，防止热端过热失效；带 6°C 回差避免频繁启停。第二轮优化后风量随废热负载自适应提升。':
+    'Forced air cooling when the TEC overtemperatures, preventing hot-side failure; 6 °C hysteresis avoids frequent cycling. After round-2 optimization, airflow adapts to the waste-heat load.',
+  '系统控制核心。板载多 IO 接口采集多点位温度与液位信号，运行滤波、换热判定、智能启停与安全保护算法，并通过 2.8 寸 TFT 彩屏与蜂鸣器实现本地可视化与报警。':
+    'Control core of the system. Multiple on-board I/O acquire multi-point temperature and level signals, running filtering, heat-exchange judgement, smart start/stop and safety-protection algorithms, with local visualisation and alarms on a 2.8" TFT display and buzzer.',
+  '为整个系统提供稳定直流供电：主控板逻辑电与继电器驱动电同源，执行层（陶瓷片、水泵、风扇）经隔离驱动继电器取电，实现强弱电分离。':
+    'Supplies stable DC power system-wide: controller logic and relay drive share the same source, while the actuators (TEC modules, pump, fan) draw power through the isolated drive relay, keeping weak and strong current separated.',
+  '光耦隔离（≥2500Vrms），实现 STM32 弱电控制端与强电执行端的安全隔离与驱动放大。':
+    'Optocoupler isolation (≥2500 Vrms) providing safe separation and drive amplification between the STM32 low-voltage control side and the high-power actuator side.',
+
+  /* ---------- 提示卡参数行表头 ---------- */
+  '陶瓷片温度': 'TEC temperature',
+  '铝排温度': 'Fin stack temp',
+  '水温': 'Water temp',
+  '水位': 'Water level',
+  '目标温度': 'Target temperature',
+  '有效水量': 'Usable water',
+  '状态': 'Status',
+  '供电状态': 'Power state',
+  '当前等效负载': 'Current equivalent load',
+  '等效发热功率': 'Equivalent heating power',
+  '均热措施': 'Heat spreading',
+  '启停判据 Δt': 'Start/stop criterion Δt',
+  '换热状态': 'Heat-exchange state',
+  '传热温差 Δ': 'Heat-transfer ΔT',
+  '鳍片数量 / 材质': 'Fin count / material',
+  '水冷头流道': 'Water-block channels',
+  '两端宝塔接头 + 卡箍': 'Barb fittings + clamps',
+  '导流板（二轮优化）': 'Baffle plate (round-2 opt.)',
+  '已安装 · 无循环死角': 'Installed · no dead zone',
+  '未安装 · 存在死角': 'Not installed · dead zone exists',
+  '额定流量 / 扬程': 'Rated flow / head',
+  '运行状态': 'Run state',
+  '控制模式': 'Control mode',
+  '手动干预': 'Manual override',
+  '当前动作输出': 'Current output action',
+  '功耗': 'Power draw',
+  '转速': 'Speed',
+  '风量 / 噪声': 'Airflow / noise',
+  '风扇联动阈值': 'Fan interlock threshold',
+  '启动阈值': 'Start threshold',
+  '80.0 °C（回差 74 °C）': '80.0 °C (hysteresis 74 °C)',
+  '当前陶瓷片温度': 'Current TEC temperature',
+  '强制风冷': 'Forced air cooling',
+  '自然对流': 'Natural convection',
+  '循环换热中': 'Circulating heat exchange',
+  '主循环': 'Main loop',
+  '主控型号': 'Controller model',
+  'TFT 显示内容': 'TFT readout',
+  '蜂鸣器': 'Buzzer',
+  '隔离电压': 'Isolation voltage',
+  '触点寿命': 'Contact life',
+  '驱动通道': 'Drive channels',
+  '输出规格': 'Output rating',
+  '用电侧隔离': 'Load-side isolation',
+  '强制对流（水泵运行）': 'Forced convection (pump running)',
+  '检测误差': 'Measurement error',
+  '监测误差': 'Measurement error',
+  '机型 / 固件': 'Model / firmware',
+  '°C（阈值 5）': '°C (threshold 5)',
+  ' °C（阈值 5）': ' °C (threshold 5)',
+  '通电运行': 'Energized, running',
+  '运行预警': 'Operating warning',
+  ' 周': ' wk',
+  'AUTO 运行中': 'AUTO RUNNING',
+  'MANUAL 手动': 'MANUAL MODE',
+  ' kW 级热端': ' kW-class hot side',
+  '0.4 W（待机）': '0.4 W (standby)',
+  '13 片 / 6063-T5 铝合金': '13 fins / 6063-T5 alloy',
+  '导热硅胶垫 + 铜导热板': 'Thermal pad + copper spreader',
+  '4 路（泵/风扇/陶瓷片/备用）': '4 channels (pump / fan / TEC / spare)',
+  '2500 Vrms 光耦隔离': '2500 Vrms opto-isolated',
+  '≥ 10⁵ 次': '≥ 10⁵ cycles',
+  '全自动': 'Fully automatic',
+  '手动': 'Manual',
+  '自动': 'Auto',
+  '无输出': 'No output',
+  '高工况风扇优化': 'High-load fan optimization',
+  '已启用 · 负载自适应': 'Enabled · load-adaptive',
+  '未启用 · 散热不足': 'Disabled · insufficient cooling',
+
+  /* ---------- 底部状态栏 ---------- */
+  '运行模式': 'Operation mode',
+  '今日累计回收热量': 'Recovered heat today',
+  '预估节省电费': 'Estimated electricity saving',
+  '连续运行时长': 'Continuous run time',
+  '仿真×60': 'sim ×60',
+  '元': 'CNY',
+  '周': ' wk',
+  '今日等效产热水': 'Equivalent hot water today',
+
+  /* ---------- 3D 标签 / TFT 屏 ---------- */
+  '陶瓷 TEC': 'TEC TEMP',
+  '水温 TANK': 'Water TEMP',
+  '冷风 AIR': 'Cold air',
+  '陶瓷片超温': 'TEC overtemperature',
+  '温度/水位/效率/能耗/产水量': 'Temp / level / η / energy / hot water',
+  'DC 电源适配器': 'DC ADAPTER',
+  '水位 LEVEL': 'LEVEL',
+  '回收效率 ETA': 'RECOVERY η',
+  '累计回收': 'RECOVERED',
+  '节省电费': 'SAVINGS',
+  '产热水': 'HOT WATER',
+  '自动模式 ': 'Auto mode ',
+
+  /* ---------- 星期 ---------- */
+  '日': 'Sun', '一': 'Mon', '二': 'Tue', '三': 'Wed', '四': 'Thu', '五': 'Fri', '六': 'Sat',
+
+  /* ---------- 控制台输出标签 ---------- */
+  '[initThree 失败]': '[initThree failed]',
+  '[渲染循环异常]': '[render loop error]'
+};
+
+/* 取译文：缺词条时原样返回中文，保证不会显示空白 */
+function TR(s) {
+  return (LANG === 'en' && typeof s === 'string' && DICT[s] !== undefined) ? DICT[s] : s;
+}
+
+/* Canvas 绘制用字体：英文模式切到西文字体，避免中文 ordinal 字形导致的排版偏移 */
+function CNFONT(px, bold, extra) {
+  var fam = LANG === 'en'
+    ? '"Segoe UI",system-ui,-apple-system,sans-serif'
+    : '"Microsoft YaHei","PingFang SC",sans-serif';
+  return (bold ? 'bold ' : '') + px + 'px ' + fam + (extra ? ',' + extra : '');
+}
+
+/* 文本节点 / 属性回填：保留首尾空白，只替换核心串 */
+function mapNodeText(src) {
+  if (LANG === 'zh' || typeof src !== 'string' || !/[一-龥]/.test(src)) return src;
+  var core = src.replace(/^\s+|\s+$/g, '');
+  if (DICT[core] === undefined) return src;
+  var lead = /^\s*/.exec(src)[0], trail = /\s*$/.exec(src)[0];
+  return lead + DICT[core] + trail;
+}
+
+/* 静态 DOM 双语化：首次遍历缓存中文原文到 __izh / __ititle */
+function applyStatic(root) {
+  if (!root) return;
+  var IATTRS = ['title', 'placeholder'];
+  function walk(node) {
+    var kids = node.childNodes || [], i;
+    for (i = 0; i < kids.length; i++) {
+      var c = kids[i];
+      if (c.nodeType === 3) {                       // 文本节点
+        if (c.__izh === undefined) c.__izh = c.nodeValue;
+        var want = mapNodeText(c.__izh);
+        if (c.nodeValue !== want) c.nodeValue = want;
+        } else if (c.nodeType === 1) {                // 元素
+          // data-noi18n：该元素的 title/placeholder 由脚本动态维护，跳过静态回填
+          if (c.hasAttribute && c.hasAttribute('data-noi18n')) { walk(c); continue; }
+          for (var a = 0; a < IATTRS.length; a++) {
+          var at = IATTRS[a];
+          if (!c.getAttribute) continue;
+          var v = c.getAttribute(at);
+          if (!v) continue;
+          var key = '__i' + at;
+          if (c[key] === undefined) c[key] = v;
+          var w = mapNodeText(c[key]);
+          if (v !== w) c.setAttribute(at, w);
+        }
+        walk(c);
+      }
+    }
+  }
+  // 自身也可能带属性（如 root 是 #app）
+  if (root.getAttribute) {
+    for (var a2 = 0; a2 < IATTRS.length; a2++) {
+      var at2 = IATTRS[a2], v2 = root.getAttribute(at2), k2 = '__i' + at2;
+      if (v2) { if (root[k2] === undefined) root[k2] = v2; var w2 = mapNodeText(root[k2]); if (v2 !== w2) root.setAttribute(at2, w2); }
+    }
+  }
+  walk(root);
+}
+
+/* 只对 [$ 引用到的 DOM .getElementById(id)] 之外的纯静态区域做替换时也可调用；
+   切换语言由 setLang() 统一入口处理（后面定义） */
+
+
+/* ============================================================================
+ * 1. 仿真状态 —— 单一数据源
+ * ========================================================================== */
+var S = {
+  // ---- 运行模式 ----
+  systemOn: true,     // 总启停
+  auto: true,         // 自动 / 手动
+  heatPct: 70,        // 废热产生量（压缩机负载 %）
+  setpoint: 55,       // 热水需求温度 °C
+
+  // ---- 第二轮优化开关（对应研发日志 2026-01-25 针对首轮测试问题的整改）----
+  baffle: true,       // ① 水箱内置导流板：消除储水循环死角（首轮 η 仅 58.5% 的根因）
+  fanOpt: true,       // ② 风扇散热强化：改善高废热工况下陶瓷片散热不足
+
+  // ---- 温度场（°C）----
+  Tamb: 26,           // 环境温度
+  Tc: 72,             // 陶瓷片（废热源）
+  Tf: 62,             // 加热铝排
+  Tw: 46,             // 水箱水温
+  Tair: 14,           // 冷风出风
+
+  // ---- 其他物理量 ----
+  level: 82,          // 水位 %
+  eff: 65.2,          // 回收效率 %
+  respMs: 520,        // 执行部件响应时间 ms
+  latMs: 158,         // 数据处理延迟 ms
+
+  // ---- 指令与执行状态（含动作延迟）----
+  cmdCer: true, cmdPump: false, cmdFan: false,
+  actCer: true, actPump: false, actFan: false,
+  pending: {},        // 正在执行的动作 {key:{t,total}}
+
+  // ---- 保护与报警 ----
+  protect: false,     // 干烧保护
+  alarm: false,
+
+  // ---- 生活热水负荷 ----
+  useW: 0,            // 当前取热温降负荷
+  drawT: 14,          // 下次取热水倒计时 s
+  hotWaterL: 0,       // 今日累计产出热水量（温升 25K 折算，L）
+  heatKWh: 12.60,     // 今日累计回收热量
+  money: 7.31,        // 预估节省电费（0.58 元/kWh）
+  upSec: 168 * 3600,  // 连续运行时长（秒，含 ×60 加速）
+
+  // ---- 恒值 ----
+  SIM_SPEED: 60,      // 仿真时间加速倍率
+  PRICE: 0.58
+};
+
+// 历史曲线数据（每 500ms 采样，保留 60 点 = 30s）
+var histTc = [], histTw = [], HIST_N = 60;
+(function initHist() {
+  for (var i = 0; i < HIST_N; i++) { histTc.push(S.Tc); histTw.push(S.Tw); }
+})();
+
+/* ============================================================================
+ * 2. 物理 / 控制仿真步进（定步长 1/60s）
+ * ========================================================================== */
+var UI_TICK = 0.5;      // 数据面板刷新间隔 500ms
+var uiAcc = 0, histAcc = 0;
+
+function stepSim(dt) {
+  nowSec += dt;
+  var Tamb = S.Tamb;
+
+  /* ---------- 2.1 控制层：自动控制逻辑（STM32 主循环） ---------- */
+  // 干烧保护：水位低于 20% 立即切断陶瓷片与水泵
+  if (S.level < 20) {
+    if (!S.protect) { S.protect = true; S.alarm = true; }
+  }
+  if (S.protect && S.level >= 25) { S.protect = false; S.alarm = false; }
+
+    var power = S.heatPct / 100 * 1.6;   // 等效发热功率系数 0.32 ~ 1.6
+
+  if (S.auto) {
+    // 陶瓷片：系统开启且未处于干烧保护
+    S.cmdCer = S.systemOn && !S.protect;
+    if (S.systemOn && !S.protect) {
+      // 水泵：陶瓷片-水箱温差 > 5°C 且水温低于「设定值-回差」时启动
+      var dT = S.Tc - S.Tw;
+      if (S.Tw < S.setpoint - 3) {
+        if (dT > 5) S.cmdPump = true;
+      }
+      if (S.Tw >= S.setpoint || dT < 2) S.cmdPump = false;
+      // 风扇：陶瓷片超温 80°C 启动，带回差 74°C 关闭
+      if (S.Tc > 80) S.cmdFan = true;
+      else if (S.Tc < 74) S.cmdFan = false;
+    } else {
+      S.cmdPump = false; S.cmdFan = S.actFan && false;
+    }
+  } else {
+    // 手动模式：由用户按钮决定，但仍受干烧保护约束
+    S.cmdCer = S.systemOn && !S.protect;
+    if (!S.systemOn || S.protect) { S.cmdPump = false; S.cmdFan = false; }
+  }
+  if (S.protect) { S.cmdPump = false; S.cmdCer = false; }
+
+  /* ---------- 2.2 执行层：带响应延时的动作逼近实际值 ---------- */
+  applyActuator('Cer', dt);
+  applyActuator('Pump', dt);
+  applyActuator('Fan', dt);
+
+  /* ---------- 2.3 热力学微分方程（显式欧拉） ---------- */
+  var SIC = 0.05, SIF = 0.12, SIW = 0.25;     // 各部件热惯性系数
+  var heatIn = S.actCer ? 26 * power : 0;      // 陶瓷片发热（等效）
+  // 第②项优化：优化后的风扇在高废热工况下散热能力随负载增强；未优化时风量固定偏低
+  var fanK = S.actFan ? (S.fanOpt ? 0.45 + 0.22 * clamp(power - 0.9, 0, 0.7) : 0.38) : 0;
+  var convTc = (0.10 + fanK) * (S.Tc - Tamb);   // 自然对流 + 强制风冷
+  var condTc = 0.5 * (S.Tc - S.Tf);                              // 传导至铝排
+  var dTc = SIC * (heatIn - convTc - condTc);
+
+  var vols = 0.35 + 0.65 * (S.level / 100);    // 水容量（影响升温速率）
+  // 第①项优化：无导流板时水体存在循环死角，有效换热面积下降
+  var mixK = S.baffle ? 1 : 0.84;
+  var toWater = mixK * (S.actPump ? 0.052 : 0.006) * (S.Tf - S.Tw) / vols;
+  var dTf = SIF * (condTc - toWater - 0.09 * (S.Tf - Tamb));
+  // 水箱：泵入热量 - 保温散热 - 生活热水取用负荷
+  var lossTank = 0.022 * (S.Tw - Tamb);
+  var dTw = SIW * (toWater - lossTank - S.useW);
+  S.useW = Math.max(0, S.useW - dt * 0.24);   // 取热负荷衰减
+
+  // 生活热水取用事件：周期性取热水并补入冷水 → 水温阶跃下降、水位略降
+  S.drawT -= dt;
+  if (S.drawT <= 0) {
+    S.drawT = rnd(50, 78);
+    if (S.systemOn && !S.protect && S.level > 25) {
+      S.useW = 1.25;
+      S.level = clamp(S.level - 1.1, 0, 100);
+    }
+  }
+
+  S.Tc = clamp(S.Tc + dTc * dt, Tamb, 160);
+  S.Tf = clamp(S.Tf + dTf * dt, Tamb, 160);
+  S.Tw = clamp(S.Tw + dTw * dt, Tamb, 100);
+
+  // 冷风温度：随负载下降，停机时回归环境温度
+  var tAirTarget = S.systemOn ? (Tamb - 4 - 7 * power) : Tamb;
+  S.Tair = lerp(S.Tair, tAirTarget + rnd(-0.15, 0.15), clamp(dt * 0.6, 0, 1));
+
+  /* ---------- 2.4 水位：运行耗水 + 缓慢蒸发 ---------- */
+  var drain = (S.actPump ? 0.040 : 0.010) + 0.004;
+  S.level = clamp(S.level - drain * dt, 0, 100);
+
+  /* ---------- 2.5 效率模型（依据实时工况对标称 65.2% 修正） ---------- */
+  // 说明：陶瓷片停止取冷/强制风冷会带走部分可回收热量，据此对标称值修正；
+  //      达到设定温度后水泵暂停期间，热量已储存在水箱中，效率按保温工况小幅回落。
+  var effTarget = 0;
+  if (S.systemOn && !S.protect && S.actCer) {
+    var kPump;
+    if (S.actPump) kPump = 1;                                   // 水泵运行 → 强制换热
+    else if (S.Tw >= S.setpoint - 3.5) kPump = 0.99;            // 已达设定温度 → 保温工况
+    else kPump = 0.97;                                          // 等待温差 → 效率略降
+    var kLoad = 1 - Math.abs(power - 1.1) * 0.04;               // 偏离额定负载衰减
+    var kFan = S.actFan ? 0.99 : 1.0;                           // 风扇带走部分热量
+    // 两项整改直接对应研发日志中的实测数据：首轮 58.5%（未达标）→ 二轮 65.2%（达标）
+    var kBaffle = S.baffle ? 1 : (58.5 / 65.2);
+    var kFanOpt = S.fanOpt ? 1 : 0.985;
+    effTarget = 65.2 * kPump * kLoad * kFan * kBaffle * kFanOpt + Math.sin(nowSec / 7) * 0.6;
+  }
+  S.eff = lerp(S.eff, clamp(effTarget, 0, 72), clamp(dt * 0.4, 0, 1));  // 平滑滤波
+
+  /* ---------- 2.6 累计量（时间加速 ×60） ---------- */
+  var recoveredKW = S.systemOn ? power * (S.eff / 100) * 1.2 : 0;
+  var dh = dt * S.SIM_SPEED / 3600;                          // 折算小时
+  S.heatKWh += recoveredKW * dh;
+  S.money += recoveredKW * dh * S.PRICE;
+  // 热水产出量：回收热量按温升 25K 折合（1 kWh ≈ 34.4 L）
+  if (recoveredKW > 0) S.hotWaterL += recoveredKW * dh * 34.4;
+  S.upSec += S.systemOn ? dt * S.SIM_SPEED : 0;
+
+  /* ---------- 2.7 数据处理延迟随机游走 ---------- */
+  histAcc += dt; uiAcc += dt;
+  if (histAcc >= UI_TICK) {
+    histAcc = 0;
+    histTc.push(S.Tc); if (histTc.length > HIST_N) histTc.shift();
+    histTw.push(S.Tw); if (histTw.length > HIST_N) histTw.shift();
+    S.latMs = Math.round(clamp(lerp(S.latMs, rnd(120, 180), 0.45), 100, 195));
+  }
+  S.__kw = recoveredKW;
+}
+
+/* 单个执行部件：指令 →（响应延时）→ 实际动作 */
+function applyActuator(key, dt) {
+  var map = { Cer: 'Cer', Pump: 'Pump', Fan: 'Fan' };
+  var cmdK = 'cmd' + key, actK = 'act' + key;
+  if (S[cmdK] === S[actK]) { delete S.pending[key]; return; }
+  var p = S.pending[key];
+  if (!p) { p = S.pending[key] = { t: 0, total: rnd(0.30, 0.70) }; }  // 响应时间 ≤0.7s
+  p.t += dt;
+  if (p.t >= p.total) {
+    S[actK] = S[cmdK];
+    S.respMs = Math.round(p.total * 1000);                            // 记录真实响应耗时
+    delete S.pending[key];
+  }
+}
+
+/* ============================================================================
+ * 3. Three.js 场景搭建
+ * ========================================================================== */
+var stageEl = $('stage'), canvasEl = $('scene');
+var renderer, scene, camera;
+var comps = {};        // 组件 root Object3D
+var labels = {};       // 标签精灵
+var pickables = [];    // 可拾取网格
+var flows = {};        // 流动管线
+var anchor = {};       // 组件世界锚点（用于提示卡定位）
+
+/* 注意：以下数组与常量必须在 initThree() 之前完成初始化，
+   否则场景构建阶段（同步调用）会拿到 undefined —— 声明位置不可后移 */
+var cerGlows = [];     // 陶瓷片 ×2 热源光晕
+var fanRotors = [];    // 散热风扇 ×2 叶轮
+var waterBaseY = 0.9, waterMaxH = 2.72;   // 水体基准高度 / 满量程高度
+
+var lightHeat, lightAlarm;
+var selectionRing;
+
+var COL = { cyan: 0x00d4ff, orange: 0xff6b35, hot: 0xff3a0a, cold: 0x26c6ff, signal: 0xa86bff };
+
+try {
+  initThree();
+} catch (err) {
+  /* WebGL 不可用 / 场景构建失败时给出明确提示，而不是留一片黑屏 */
+  try {
+    document.getElementById('bootTxt').textContent = TR('3D 初始化失败');
+    document.getElementById('bootSub').textContent =
+      TR('原因：') + (err && err.message ? err.message : String(err)) +
+      TR('。请确认浏览器已启用 WebGL（chrome://gpu）后刷新。');
+    document.querySelector('#boot .ring').style.display = 'none';
+    console.error(TR('[initThree 失败]'), err);
+  } catch (x) { }
+  return;
+}
+
+function initThree() {
+  renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x0a0e14, 1);
+  if ('outputColorSpace' in renderer && THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+  else renderer.outputEncoding = THREE.sRGBEncoding;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0e14);
+  scene.fog = new THREE.Fog(0x0a0e14, 34, 82);
+
+  camera = new THREE.PerspectiveCamera(42, 1, 0.1, 300);
+
+  /* ---------- 灯光 ---------- */
+  scene.add(new THREE.HemisphereLight(0x2b4b66, 0x05080c, 0.55));
+  var dir = new THREE.DirectionalLight(0xcfe6ff, 0.85); dir.position.set(9, 16, 12); scene.add(dir);
+  var dir2 = new THREE.DirectionalLight(0x4f7ea8, 0.35); dir2.position.set(-12, 8, -10); scene.add(dir2);
+  var rimC = new THREE.PointLight(COL.cyan, 0.85, 34); rimC.position.set(-8, 5, -6); scene.add(rimC);
+  lightHeat = new THREE.PointLight(COL.orange, 0.4, 22); lightHeat.position.set(-6.4, 2.6, 0.6); scene.add(lightHeat);
+  lightAlarm = new THREE.PointLight(0xff2020, 0, 30); lightAlarm.position.set(-3.4, 3.2, 0); scene.add(lightAlarm);
+  var rimB = new THREE.PointLight(COL.signal, 0.45, 22); rimB.position.set(6.6, 3.4, -3.2); scene.add(rimB);
+
+  buildFloor();
+  buildHotModule();   // 热回收模组：陶瓷片×2 + 铜导热板 + 加热铝排(鳍片) + 铝制水冷头（含进出水口）
+  buildFans();        // 双风扇强制散热（陶瓷片超温联动）
+  buildTank();        // 储热水箱（内置导流板，消除循环死角）
+  buildPump();        // 循环水泵
+  buildRelay();       // 隔离驱动继电器
+  buildBoard();       // STM32F103 主控板（板载 2.8" TFT 彩屏 + 蜂鸣器）
+  buildPSU();         // 12V/180W 电源适配器
+  buildFlows();
+
+  // 选中指示环
+  selectionRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.6, 0.045, 8, 60),
+    new THREE.MeshBasicMaterial({ color: COL.cyan, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  selectionRing.rotation.x = -Math.PI / 2;
+  selectionRing.visible = false;
+  scene.add(selectionRing);
+
+  updateLayout();
+  window.addEventListener('resize', updateLayout);
+}
+
+/* ---------- 3.1 底座 + 栅格 ---------- */
+function buildFloor() {
+  var plate = new THREE.Mesh(
+    new THREE.BoxGeometry(21, 0.3, 14),
+    new THREE.MeshStandardMaterial({ color: 0x111a25, roughness: 0.85, metalness: 0.35 })
+  );
+  plate.position.set(0, 0.15, 0); plate.receiveShadow = true; scene.add(plate);
+
+  var edge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(21, 0.3, 14)),
+    new THREE.LineBasicMaterial({ color: 0x1d6a8c, transparent: true, opacity: 0.75 })
+  );
+  edge.position.set(0, 0.15, 0); scene.add(edge);
+
+  var g1 = new THREE.GridHelper(21, 42, 0x14445c, 0x123a4e);
+  g1.position.y = 0.31; g1.material.transparent = true; g1.material.opacity = 0.55; scene.add(g1);
+  var g2 = new THREE.GridHelper(21, 7, 0x2ba6d8, 0x2ba6d8);
+  g2.position.y = 0.32; g2.material.transparent = true; g2.material.opacity = 0.28; scene.add(g2);
+
+  // 冷端/热端地贴标识（对应实际系统中的三大分区：热源区 / 储热区 / 控制供电区）
+  addFloorMark(-6.4, 0, COL.orange, 2.3);   // 热源：陶瓷片组 + 铝排 + 水冷头
+  addFloorMark(-1.4, 0, COL.cyan, 1.7);     // 储热：保温水箱
+  addFloorMark(6.4, -2.4, COL.signal, 1.9); // 控制/供电：STM32 主控板 + 12V 电源
+}
+function addFloorMark(x, z, color, r) {
+  var m = new THREE.Mesh(
+    new THREE.RingGeometry(r * 0.82, r, 48),
+    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+  );
+  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.33, z); scene.add(m);
+}
+
+/* ---------- 3.2 热回收模组：陶瓷片×2 → 铜导热板 → 加热铝排 + 水冷头 ---------- */
+var matCerTop, matCerSide, matFin, matHead, matCopper;   // 光晕数组见顶部 cerGlows
+function buildHotModule() {
+  var root = new THREE.Group(); root.position.set(-6.4, 0, 0); scene.add(root);
+
+  /* ===== A. 加热铝排（核心热交换器，含基座与鳍片阵列）===== */
+  var gFin = new THREE.Group(); root.add(gFin); comps.fins = gFin;
+
+  var basePlate = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.16, 2.9),
+    new THREE.MeshStandardMaterial({ color: 0x39434e, roughness: 0.55, metalness: 0.75 }));
+  basePlate.position.y = 0.68; gFin.add(basePlate);
+  [[-1.35, -1.25], [1.35, -1.25], [-1.35, 1.25], [1.35, 1.25]].forEach(function (p) {
+    var leg = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.42, 10),
+      new THREE.MeshStandardMaterial({ color: 0x2b3644, roughness: 0.6, metalness: 0.7 }));
+    leg.position.set(p[0], 0.51, p[1]); gFin.add(leg);
+  });
+
+  matFin = new THREE.MeshStandardMaterial({ color: 0xb9c4cc, roughness: 0.34, metalness: 0.92, emissive: 0x000000, emissiveIntensity: 1 });
+  for (var i = 0; i < 13; i++) {
+    var fin = new THREE.Mesh(new THREE.BoxGeometry(0.075, 1.85, 2.5), matFin);
+    fin.position.set(-1.44 + i * 0.24, 1.69, 0); gFin.add(fin);
+  }
+  var topBar = new THREE.Mesh(new THREE.BoxGeometry(3.02, 0.12, 2.52),
+    new THREE.MeshStandardMaterial({ color: 0x6d7a86, roughness: 0.35, metalness: 0.9 }));
+  topBar.position.y = 2.66; gFin.add(topBar);
+  // 铜导热板（陶瓷片热面 → 铝排/水冷头）
+  matCopper = new THREE.MeshStandardMaterial({ color: 0xb87333, roughness: 0.28, metalness: 0.95 });
+  var cuPlate = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.14, 2.5), matCopper);
+  cuPlate.position.y = 2.79; gFin.add(cuPlate);
+
+  /* ===== B. 陶瓷片组 + 铝制水冷头（热回收端）===== */
+  var gCer = new THREE.Group(); root.add(gCer); comps.ceramic = gCer;
+
+  matCerTop = new THREE.MeshStandardMaterial({ color: 0xd9e2ea, roughness: 0.35, metalness: 0.25, emissive: 0x0a3348, emissiveIntensity: 0.5 });
+  matCerSide = new THREE.MeshStandardMaterial({ color: 0x8e9aa6, roughness: 0.6, metalness: 0.4 });
+  var padMat = new THREE.MeshStandardMaterial({ color: 0xd9c9a8, roughness: 0.85, metalness: 0.05 });
+  [-0.75, 0.75].forEach(function (x, k) {
+    // 制冷陶瓷片（TEC，模拟空调压缩机废热端）
+    var tec = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.17, 1.9),
+      [matCerSide, matCerSide, matCerTop, matCerSide, matCerSide, matCerSide]);
+    tec.position.set(x, 2.95, 0); gCer.add(tec);
+    // 导热硅胶垫（解决陶瓷片温度分布不均、提升贴合度）
+    var pad = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.05, 1.98), padMat);
+    pad.position.set(x, 3.06, 0); gCer.add(pad);
+    // 蓝色温度光晕（随温度升高增强）
+    var glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(120, 220, 255), color: 0x66ddff, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
+    }));
+    glow.position.set(x, 3.0, 0.6); glow.scale.set(2.7, 2.7, 1); gCer.add(glow);
+    cerGlows.push(glow);
+  });
+
+  // 铝制水冷头（蓝色阳极氧化）
+  matHead = new THREE.MeshStandardMaterial({ color: 0x1f6fd0, roughness: 0.32, metalness: 0.85 });
+  var head = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 1.25), matHead);
+  head.position.y = 3.38; gCer.add(head);
+
+  // 两端宝塔接头（进出水口）+ 防脱卡箍
+  var barbMat = new THREE.MeshStandardMaterial({ color: 0x2f8fe0, roughness: 0.35, metalness: 0.8 });
+  [-1.66, 1.66].forEach(function (x) {
+    var barb = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.145, 0.36, 14), barbMat);
+    barb.position.set(x, 3.38, 0); barb.rotation.z = Math.PI / 2; gCer.add(barb);
+    for (var r = 0; r < 3; r++) {
+      var ridge = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.016, 6, 16), barbMat);
+      ridge.position.set(x + (x > 0 ? 0.08 : -0.08) * (r - 1), 3.38, 0);
+      ridge.rotation.y = Math.PI / 2; gCer.add(ridge);
+    }
+  });
+  // 不锈钢卡扣 + 螺丝（压紧陶瓷片）
+  [-0.85, 0.9].forEach(function (x) {
+    var strap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 1.5),
+      new THREE.MeshStandardMaterial({ color: 0xc8d2da, roughness: 0.25, metalness: 0.95 }));
+    strap.position.set(x, 3.66, 0); gCer.add(strap);
+    [-0.7, 0.7].forEach(function (z) {
+      var screw = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.14, 10),
+        new THREE.MeshStandardMaterial({ color: 0xb9c4cc, roughness: 0.3, metalness: 0.95 }));
+      screw.position.set(x, 3.62, z); gCer.add(screw);
+    });
+  });
+  // 陶瓷片温度传感器探头（多点位温度采集之一）
+  var probe = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.62, 10),
+    new THREE.MeshStandardMaterial({ color: 0xd6dde4, roughness: 0.3, metalness: 0.9 }));
+  probe.position.set(1.72, 3.0, 0.6); probe.rotation.z = -0.6; gCer.add(probe);
+
+  anchor.ceramic = new THREE.Vector3(-7.15, 4.2, 0);
+  addLabel('ceramic', TR('制冷陶瓷片 ×2'), 4.4);
+  registerPick(gCer, 'ceramic');
+  anchor.fins = new THREE.Vector3(-9.15, 1.6, 0);
+  addLabel('fins', TR('加热铝排 / 水冷头'), 1.8);
+  registerPick(gFin, 'fins');
+}
+
+/* ---------- 3.4 水箱（半透明圆柱 + 内部水体） ---------- */
+var matWater, meshWater, matTankShell;   // waterBaseY / waterMaxH 已在顶部初始化
+var baffleMesh, matBaffle, deadZones;   // 第二轮优化①：导流板 + 循环死角可视化
+function buildTank() {
+  var g = new THREE.Group(); g.position.set(-1.4, 0, 0); scene.add(g); comps.tank = g;
+
+  // 基座
+  var ped = new THREE.Mesh(new THREE.CylinderGeometry(1.62, 1.72, 0.6, 32),
+    new THREE.MeshStandardMaterial({ color: 0x2b3644, roughness: 0.7, metalness: 0.5 }));
+  ped.position.y = 0.6; g.add(ped);
+
+  // 外壳（半透明）
+  matTankShell = new THREE.MeshPhysicalMaterial({
+    color: 0xa8d8f5, transparent: true, opacity: 0.16, roughness: 0.08, metalness: 0.1,
+    side: THREE.DoubleSide, depthWrite: false
+  });
+  var shell = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 3.0, 48, 1, true), matTankShell);
+  shell.position.y = 2.2; g.add(shell);
+
+  // 上下端盖 + 保温圈
+  var capMat = new THREE.MeshStandardMaterial({ color: 0x53616e, roughness: 0.4, metalness: 0.85 });
+  var cap1 = new THREE.Mesh(new THREE.CylinderGeometry(1.56, 1.56, 0.16, 48), capMat); cap1.position.y = 3.78; g.add(cap1);
+  var cap2 = new THREE.Mesh(new THREE.CylinderGeometry(1.56, 1.56, 0.16, 48), capMat); cap2.position.y = 0.86; g.add(cap2);
+  [1.2, 2.2, 3.2].forEach(function (y) {
+    var hoop = new THREE.Mesh(new THREE.TorusGeometry(1.53, 0.035, 8, 60),
+      new THREE.MeshStandardMaterial({ color: 0x7f8d9b, roughness: 0.35, metalness: 0.9 }));
+    hoop.rotation.x = Math.PI / 2; hoop.position.y = y; g.add(hoop);
+  });
+  // 轮廓线
+  var wire = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.CylinderGeometry(1.5, 1.5, 3.0, 48, 1, true)),
+    new THREE.LineBasicMaterial({ color: 0x2fa9d8, transparent: true, opacity: 0.35 })
+  );
+  wire.position.y = 2.2; g.add(wire);
+
+  // 水体（自底向上缩放）
+  matWater = new THREE.MeshStandardMaterial({
+    color: 0x0b4fa8, transparent: true, opacity: 0.78, roughness: 0.18, metalness: 0.15,
+    emissive: 0x062c66, emissiveIntensity: 0.55
+  });
+  var wg = new THREE.CylinderGeometry(1.39, 1.39, 1, 40); wg.translate(0, 0.5, 0);
+  meshWater = new THREE.Mesh(wg, matWater);
+  meshWater.position.y = waterBaseY; g.add(meshWater);
+
+  // 水面高光环
+  var surf = new THREE.Mesh(new THREE.CircleGeometry(1.38, 40),
+    new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+  surf.rotation.x = -Math.PI / 2; surf.position.y = 2.4; g.add(surf); g.userData.surf = surf;
+
+  // 水温/水位传感器探头
+  var probe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5, 10),
+    new THREE.MeshStandardMaterial({ color: 0xd6dde4, roughness: 0.3, metalness: 0.9 }));
+  probe.position.set(0.7, 3.2, 0.7); probe.rotation.z = -0.25; g.add(probe);
+
+  /* ===== 第二轮优化①：内置导流板（消除储水循环死角，η 58.5% → 65.2%）===== */
+  // 冲孔板：Canvas 作为 alphaMap 打出导流孔
+  var bcv = document.createElement('canvas'); bcv.width = bcv.height = 128;
+  var bx = bcv.getContext('2d');
+  bx.fillStyle = '#fff'; bx.fillRect(0, 0, 128, 128);
+  bx.fillStyle = '#000';
+  for (var ri = 0; ri < 5; ri++) for (var ci = 0; ci < 5; ci++) {
+    bx.beginPath();
+    bx.arc(16 + ci * 24, 16 + ri * 24, 6.2, 0, Math.PI * 2); bx.fill();
+  }
+  var bTex = new THREE.CanvasTexture(bcv);
+  matBaffle = new THREE.MeshStandardMaterial({
+    color: 0x8fa6b8, roughness: 0.3, metalness: 0.9, transparent: true, alphaMap: bTex,
+    alphaTest: 0.35, side: THREE.DoubleSide, emissive: 0x0a3450, emissiveIntensity: 0.4
+  });
+  baffleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.35, 2.35), matBaffle);
+  baffleMesh.position.set(0.38, 2.2, 0); g.add(baffleMesh);
+  // 导流板支撑导轨
+  [-1.05, 1.05].forEach(function (z) {
+    var rail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.5, 0.09),
+      new THREE.MeshStandardMaterial({ color: 0x6e7d8b, roughness: 0.35, metalness: 0.9 }));
+    rail.position.set(0.38, 2.2, z); rail.rotation.y = Math.PI / 2; g.add(rail);
+  });
+
+  /* ===== 未装导流板时的「循环死角」可视化 ===== */
+  deadZones = new THREE.Group(); g.add(deadZones);
+  var dzMat = new THREE.MeshBasicMaterial({
+    color: 0x1d3f5c, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  [[-0.95, 1.35, 0.75, 0.52], [0.95, 1.75, -0.8, 0.46], [0.0, 1.1, -1.0, 0.4]].forEach(function (p) {
+    var blob = new THREE.Mesh(new THREE.SphereGeometry(p[3], 16, 14), dzMat);
+    blob.position.set(p[0], p[1], p[2]); blob.scale.y = 0.75; deadZones.add(blob);
+  });
+
+  /* ===== 进 / 出水宝塔接头（对接水循环管路）===== */
+  var barbMat = new THREE.MeshStandardMaterial({ color: 0x2f8fe0, roughness: 0.35, metalness: 0.8 });
+  // 低位出水口 → 水泵进水侧
+  var outB = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 0.42, 14), barbMat);
+  outB.position.set(1.62, 1.25, 0.45); outB.rotation.z = -Math.PI / 2; g.add(outB);
+  var clamp1 = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.02, 6, 18),
+    new THREE.MeshStandardMaterial({ color: 0xc8d2da, roughness: 0.3, metalness: 0.95 }));
+  clamp1.position.set(1.7, 1.25, 0.45); clamp1.rotation.y = Math.PI / 2; g.add(clamp1);
+  // 高位回水口 ← 铝制水冷头出水侧
+  var inB = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 0.42, 14), barbMat);
+  inB.position.set(-0.55, 4.0, -0.45); g.add(inB);
+  var clamp2 = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.02, 6, 18),
+    new THREE.MeshStandardMaterial({ color: 0xc8d2da, roughness: 0.3, metalness: 0.95 }));
+  clamp2.position.set(-0.55, 4.11, -0.45); clamp2.rotation.x = Math.PI / 2; g.add(clamp2);
+
+  anchor.tank = new THREE.Vector3(-1.4, 4.6, 0);
+  addLabel('tank', TR('储热水箱 40L'), 4.85);
+  registerPick(g, 'tank');
+}
+
+/* ---------- 3.5 循环水泵 ---------- */
+var rotorPump;
+function buildPump() {
+  var g = new THREE.Group(); g.position.set(4.6, 0, 0.4); scene.add(g); comps.pump = g;
+
+  var ped = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 1.5),
+    new THREE.MeshStandardMaterial({ color: 0x2b3644, roughness: 0.7, metalness: 0.5 }));
+  ped.position.y = 0.5; g.add(ped);
+
+  var body = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.9, 32),
+    new THREE.MeshStandardMaterial({ color: 0x3c6f86, roughness: 0.35, metalness: 0.8 }));
+  body.position.y = 1.1; g.add(body);
+  var wrap = new THREE.Mesh(new THREE.TorusGeometry(0.57, 0.05, 8, 40),
+    new THREE.MeshStandardMaterial({ color: 0x00d4ff, emissive: 0x00a0cc, emissiveIntensity: 0.8, roughness: 0.4, metalness: 0.7 }));
+  wrap.rotation.x = Math.PI / 2; wrap.position.y = 1.1; g.add(wrap);
+
+  // 出水管短节
+  var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.4, 16),
+    new THREE.MeshStandardMaterial({ color: 0x6b7784, roughness: 0.4, metalness: 0.9 }));
+  neck.position.y = 1.72; g.add(neck);
+
+  // 旋转叶轮（可视化）
+  rotorPump = new THREE.Group(); rotorPump.position.y = 1.95; g.add(rotorPump);
+  var hubM = new THREE.MeshStandardMaterial({ color: 0x00d4ff, emissive: 0x0088aa, emissiveIntensity: 0.9, roughness: 0.3, metalness: 0.6 });
+  var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.2, 16), hubM); rotorPump.add(hub);
+  for (var i = 0; i < 5; i++) {
+    var blade = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.03, 0.16), hubM);
+    var a = i / 5 * Math.PI * 2;
+    blade.position.set(Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24);
+    blade.rotation.y = -a; blade.rotation.z = 0.35;
+    rotorPump.add(blade);
+  }
+
+  anchor.pump = new THREE.Vector3(4.6, 2.6, 0.4);
+  addLabel('pump', TR('循环水泵'), 2.7);
+  registerPick(g, 'pump');
+}
+
+/* ---------- 3.6 散热风扇 ×2（陶瓷片超温强制散热） ---------- */
+// 叶轮数组 fanRotors 已在顶部初始化
+function buildFans() {
+  var g = new THREE.Group(); scene.add(g); comps.fan = g;
+  var frameMat = new THREE.MeshStandardMaterial({ color: 0x2a3441, roughness: 0.5, metalness: 0.6 });
+  var bladeMat = new THREE.MeshStandardMaterial({ color: 0x1f2b38, roughness: 0.55, metalness: 0.5, emissive: 0x081a24, emissiveIntensity: 0.6 });
+
+  [-7.25, -5.55].forEach(function (fx) {
+    var f = new THREE.Group(); f.position.set(fx, 1.75, 2.25); g.add(f);
+    var frame = new THREE.Mesh(new THREE.BoxGeometry(1.44, 1.44, 0.16), frameMat); f.add(frame);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.05, 8, 40), frameMat);
+    ring.position.z = 0.1; f.add(ring);
+    var guard = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.012, 6, 36),
+      new THREE.MeshBasicMaterial({ color: 0x2a6f8c, transparent: true, opacity: 0.45 }));
+    guard.position.z = 0.16; f.add(guard);
+    var arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 1.2), frameMat);
+    arm.position.set(0, -0.62, -0.6); f.add(arm);
+
+    var rot = new THREE.Group(); rot.position.z = 0.1; f.add(rot);
+    var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.18, 18),
+      new THREE.MeshStandardMaterial({ color: 0x22303d, roughness: 0.4, metalness: 0.8 }));
+    hub.rotation.x = Math.PI / 2; rot.add(hub);
+    for (var i = 0; i < 7; i++) {
+      var b = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.2, 0.026), bladeMat);
+      var a = i / 7 * Math.PI * 2;
+      b.position.set(Math.cos(a) * 0.34, Math.sin(a) * 0.34, 0);
+      b.rotation.z = a + 0.6; rot.add(b);
+    }
+    fanRotors.push(rot);
+  });
+
+  anchor.fan = new THREE.Vector3(-4.5, 3.05, 2.3);
+  addLabel('fan', TR('散热风扇 ×2'), 3.25);
+  registerPick(g, 'fan');
+}
+
+/* ---------- 3.7 STM32F103 主控板（板载 2.8" TFT 彩屏 + 蜂鸣器） ---------- */
+var tftCv, tftCtx, tftTex, buzzerMesh, buzzerHalo, ledPower;
+function buildBoard() {
+  var g = new THREE.Group(); g.position.set(5.9, 0, -3.1); g.rotation.y = -0.16; scene.add(g); comps.board = g;
+
+  var copperMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, roughness: 0.35, metalness: 0.9 });
+  [[-1.75, -1.2], [1.75, -1.2], [-1.75, 1.2], [1.75, 1.2]].forEach(function (p) {
+    var post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.62, 10), copperMat);
+    post.position.set(p[0], 0.61, p[1]); g.add(post);
+  });
+
+  // PCB 板体
+  var pcbGeo = new THREE.BoxGeometry(3.9, 0.1, 2.62);
+  var pcb = new THREE.Mesh(pcbGeo, new THREE.MeshStandardMaterial({ color: 0x103a5e, roughness: 0.62, metalness: 0.3 }));
+  pcb.position.y = 0.97; g.add(pcb);
+  var pcbEdge = new THREE.LineSegments(new THREE.EdgesGeometry(pcbGeo),
+    new THREE.LineBasicMaterial({ color: 0x2fa9d8, transparent: true, opacity: 0.5 }));
+  pcbEdge.position.y = 0.97; g.add(pcbEdge);
+
+  // 2.8 寸 TFT 彩屏（实时数据画面）
+  tftCv = document.createElement('canvas'); tftCv.width = 320; tftCv.height = 240;
+  tftCtx = tftCv.getContext('2d');
+  tftTex = new THREE.CanvasTexture(tftCv);
+  var bezel = new THREE.Mesh(new THREE.BoxGeometry(2.28, 1.78, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0x131c26, roughness: 0.5, metalness: 0.4 }));
+  bezel.position.set(-0.72, 1.72, 0.05); bezel.rotation.x = -0.5; g.add(bezel);
+  var screen = new THREE.Mesh(new THREE.PlaneGeometry(2.06, 1.54), new THREE.MeshBasicMaterial({ map: tftTex }));
+  screen.position.set(-0.72, 1.75, 0.115); screen.rotation.x = -0.5; g.add(screen);
+
+  // 蜂鸣器（本地声光报警）
+  buzzerMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.2, 18),
+    new THREE.MeshStandardMaterial({ color: 0x1a222c, roughness: 0.6, metalness: 0.4 }));
+  buzzerMesh.position.set(1.35, 1.12, 0.66); g.add(buzzerMesh);
+  buzzerHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(255, 120, 120), color: 0xff4d4f, transparent: true, opacity: 0,
+    blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
+  }));
+  buzzerHalo.position.set(1.35, 1.3, 0.66); buzzerHalo.scale.set(0.85, 0.85, 1); g.add(buzzerHalo);
+
+  // 电源指示灯 + 排针插座 + 接线端子
+  ledPower = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), new THREE.MeshBasicMaterial({ color: 0x26e08a }));
+  ledPower.position.set(1.62, 1.06, -0.9); g.add(ledPower);
+  for (var r = 0; r < 2; r++) for (var c = 0; c < 14; c++) {
+    var pin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.05),
+      new THREE.MeshStandardMaterial({ color: 0xd4b34a, roughness: 0.35, metalness: 0.95 }));
+    pin.position.set(1.16 + c * 0.105, 1.07, -0.24 + r * 0.26); g.add(pin);
+  }
+  [-1.35, -0.55, 0.25].forEach(function (x) {
+    var term = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0x2f7a4a, roughness: 0.5, metalness: 0.35 }));
+    term.position.set(x, 1.13, -1.04); g.add(term);
+  });
+
+  anchor.board = new THREE.Vector3(5.9, 3.05, -3.1);
+  addLabel('board', TR('STM32F103 主控板'), 3.25);
+  registerPick(g, 'board');
+}
+
+/* ---------- 3.8 12V/180W 电源适配器 ---------- */
+function buildPSU() {
+  var g = new THREE.Group(); g.position.set(8.8, 0, -3.1); scene.add(g); comps.psu = g;
+
+  var body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 1.25),
+    new THREE.MeshStandardMaterial({ color: 0x1b2029, roughness: 0.65, metalness: 0.35 }));
+  body.position.y = 0.85; g.add(body);
+  var vent = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.72, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x0c1015, roughness: 0.7, metalness: 0.3 }));
+  vent.position.set(-0.45, 0.85, 0.635); g.add(vent);
+  var led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), new THREE.MeshBasicMaterial({ color: 0x26e08a }));
+  led.position.set(0.62, 1.24, 0.62); g.add(led);
+
+  // 铭牌
+  var cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  var cx = cv.getContext('2d');
+  cx.fillStyle = '#f2f4f7'; cx.fillRect(0, 0, 256, 128);
+  cx.fillStyle = '#1b2029'; cx.font = '700 34px Consolas,monospace'; cx.textAlign = 'center';
+  cx.fillText('12V / 180W', 128, 52);
+  cx.font = '500 20px "Microsoft YaHei",sans-serif'; cx.fillStyle = '#5a6570';
+  cx.fillText(TR('DC 电源适配器'), 128, 88);
+  var plate = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.65),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) }));
+  plate.position.set(0.3, 1.351, 0); plate.rotation.x = -Math.PI / 2; g.add(plate);
+
+  // 输出线缆（连至主控板）
+  var curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(8.3, 0.9, -3.1), new THREE.Vector3(7.6, 0.6, -3.1), new THREE.Vector3(6.9, 0.78, -3.1)
+  ]);
+  var cable = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.075, 8, false),
+    new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.75, metalness: 0.2 }));
+  scene.add(cable);
+
+  anchor.psu = new THREE.Vector3(8.8, 2.15, -3.1);
+  addLabel('psu', TR('12V/180W 电源'), 2.35);
+  registerPick(g, 'psu');
+}
+
+/* ---------- 3.7 隔离驱动继电器 ---------- */
+var ledRel;
+function buildRelay() {
+  var g = new THREE.Group(); g.position.set(-1.6, 0, 3.5); scene.add(g); comps.relay = g;
+
+  var body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.85, 1.05),
+    new THREE.MeshStandardMaterial({ color: 0x202c3a, roughness: 0.65, metalness: 0.35 }));
+  body.position.y = 0.78; g.add(body);
+  var cover = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0x0d1826, roughness: 0.3, metalness: 0.5, transparent: true, opacity: 0.85 }));
+  cover.position.set(0, 0.86, 0.55); g.add(cover);
+
+  // 状态指示灯
+  ledRel = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0x26e08a }));
+  ledRel.position.set(0.45, 1.12, 0.2); g.add(ledRel);
+  var halo = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(255, 255, 255), color: 0x26e08a, transparent: true, opacity: 0.6,
+    blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false
+  }));
+  halo.position.copy(ledRel.position); halo.scale.set(0.7, 0.7, 1); g.add(halo); g.userData.halo = halo;
+
+  // 接线端子排
+  for (var i = 0; i < 4; i++) {
+    var t = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.3, 0.2),
+      new THREE.MeshStandardMaterial({ color: 0x9aa7b4, roughness: 0.45, metalness: 0.85 }));
+    t.position.set(-0.5 + i * 0.34, 1.22, -0.2); g.add(t);
+  }
+
+  anchor.relay = new THREE.Vector3(-1.6, 1.9, 3.5);
+  addLabel('relay', TR('隔离驱动继电器'), 2.1);
+  registerPick(g, 'relay');
+}
+
+/* ---------- 3.8 材质-几何-工具 ---------- */
+function glowTexture(r, gr, b) {
+  var cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  var g = cv.getContext('2d');
+  var rad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  rad.addColorStop(0, 'rgba(255,255,255,1)');
+  rad.addColorStop(0.25, 'rgba(' + r + ',' + gr + ',' + b + ',.55)');
+  rad.addColorStop(1, 'rgba(' + r + ',' + gr + ',' + b + ',0)');
+  g.fillStyle = rad; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+
+// 标注精灵（顶部铭牌）
+function addLabel(key, title, y) {
+  var cv = document.createElement('canvas'); cv.width = 384; cv.height = 96;
+  var tex = new THREE.CanvasTexture(cv);
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+  sp.scale.set(2.9, 0.72, 1); sp.position.set(anchor[key].x, y, anchor[key].z);
+  sp.renderOrder = 20; scene.add(sp);
+  labels[key] = { sp: sp, cv: cv, ctx: cv.getContext('2d'), tex: tex, title: title };
+  drawLabel(key, title, '--', '#7fe4ff');
+}
+function drawLabel(key, title, value, color) {
+  var L = labels[key], cx = L.ctx, W = 384, H = 96;
+  cx.clearRect(0, 0, W, H);
+  roundRect(cx, 5, 5, W - 10, H - 10, 16);
+  cx.fillStyle = 'rgba(9,16,25,.82)'; cx.fill();
+  cx.strokeStyle = 'rgba(0,212,255,.4)'; cx.lineWidth = 2; cx.stroke();
+  cx.textAlign = 'center';
+  cx.font = CNFONT(26, true, 'Consolas,monospace');
+  cx.fillStyle = '#cfe6f5'; cx.fillText(title, W / 2, 40);
+  cx.font = '700 32px Consolas,monospace';
+  cx.fillStyle = color; cx.fillText(value, W / 2, 76);
+  L.tex.needsUpdate = true;
+}
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r);
+  c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  c.lineTo(x + r, y + h); c.quadraticCurveTo(x, y + h, x, y + h - r);
+  c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.closePath();
+}
+
+// 注册可拾取
+function registerPick(group, cid) {
+  group.traverse(function (o) {
+    if (o.isMesh) { o.userData.cid = cid; pickables.push(o); }
+  });
+}
+
+/* ---------- 3.9 发光流动管线 ---------- */
+function FlowLine(points, opt) {
+  var curve = new THREE.CatmullRomCurve3(points.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); }));
+  var r = opt.r || 0.09;
+  var mat = new THREE.MeshStandardMaterial({ color: opt.color, roughness: 0.35, metalness: 0.75, emissive: opt.color, emissiveIntensity: 0.35 });
+  var tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 110, r, 10, false), mat);
+  scene.add(tube);
+  var matG = new THREE.MeshBasicMaterial({ color: opt.color, transparent: true, opacity: 0.10, blending: THREE.AdditiveBlending, depthWrite: false });
+  var glow = new THREE.Mesh(new THREE.TubeGeometry(curve, 110, r * 2.6, 10, false), matG);
+  scene.add(glow);
+
+  var dots = [], geo = new THREE.SphereGeometry(opt.psize || 0.085, 8, 8), n = opt.count || 16;
+  var mD = new THREE.MeshBasicMaterial({ color: opt.color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  for (var i = 0; i < n; i++) { var d = new THREE.Mesh(geo, mD); d.renderOrder = 12; scene.add(d); dots.push(d); }
+
+  return {
+    curve: curve, tube: tube, glow: glow, dots: dots, offset: 0, mat: mat, matG: matG, matD: mD, count: n,
+    update: function (dt, active, speed, colorA, colorB, mix) {
+      var sp = (isFinite(speed) ? speed : 0);
+      this.offset = (((this.offset + dt * sp * (active ? 1 : 0)) % 1) + 1) % 1;   // 永远保持在 [0,1)
+      for (var i = 0; i < this.count; i++) {
+        var d = this.dots[i];
+        if (!active) { d.visible = false; continue; }
+        d.visible = true;
+        /* t 必须落在 [0,1)，负值与 1 都会让 CatmullRomCurve3 取点越界 */
+        var raw = ((i / this.count) + this.offset) % 1;
+        var t = clamp(isFinite(raw) ? raw : 0, 0, 0.999999);
+        this.curve.getPointAt(t, d.position);
+        d.scale.setScalar(0.65 + 0.45 * Math.sin(Math.PI * t));
+      }
+      // 颜色随热强度渐变（冷端→热端）
+      var c = new THREE.Color(colorA).lerp(new THREE.Color(colorB), clamp(mix || 0, 0, 1));
+      this.mat.color.copy(c); this.mat.emissive.copy(c);
+      this.matD.color.copy(c); this.matG.color.copy(c);
+      this.matG.opacity = active ? 0.16 : 0.06;
+      this.mat.emissiveIntensity = active ? 0.55 : 0.2;
+    }
+  };
+}
+
+function buildFlows() {
+  /* ---------------------------------------------------------------
+   * 世界坐标（与 build* 系列保持严格一致）
+   *   热源模组 root(-6.4,0,0)：陶瓷片① x=-7.15 / ② x=-5.65（y≈2.95）
+   *                            铜导热板 y=2.79，鳍片 y=0.76~2.61
+   *                            铝制水冷头 y=3.13~3.63，宝塔接头 x=-8.06 / -4.74（y=3.38）
+   *   水箱 (-1.4,0,0) r=1.5：低位出水口 (0.22,1.25,0.45)；高位回水口 (-1.95,4.0,-0.45)
+   *   水泵 (4.6,0,0.4)：进水 y≈0.8；出水 y≈1.92
+   *   继电器 (-1.6,0,3.5)：端子排 y≈1.22
+   *   主控板 (5.9,0,-3.1)：TFT (-0.72,1.75,0.115) 局部；电源 (8.8,0,-3.1)
+   * --------------------------------------------------------------- */
+
+  /* ===== ① 废热传导：制冷陶瓷片 → 铜导热板 → 加热铝排（橙） ===== */
+  // 依据报告：陶瓷片模拟压缩机产生废热，通过热传导传递至加热铝排
+  flows.cond1 = FlowLine([
+    [-7.15, 3.0, 1.42], [-7.15, 2.3, 1.42], [-7.15, 1.05, 1.42]
+  ], { color: COL.orange, r: 0.07, count: 12, psize: 0.075 });
+  flows.cond2 = FlowLine([
+    [-5.65, 3.0, 1.42], [-5.65, 2.3, 1.42], [-5.65, 1.05, 1.42]
+  ], { color: COL.orange, r: 0.07, count: 12, psize: 0.075 });
+  flows.cond3 = FlowLine([
+    [-6.4, 3.0, -1.42], [-6.4, 2.3, -1.42], [-6.4, 1.05, -1.42]
+  ], { color: COL.orange, r: 0.07, count: 12, psize: 0.075 });
+
+  /* ===== ② 闭式水循环（青→橙，颜色随水温渐变） ===== */
+  // (a) 水箱低位出水 → 水泵进水侧
+  flows.wSup = FlowLine([
+    [0.42, 1.25, 0.45], [1.35, 1.0, 0.95], [2.6, 0.72, 1.35], [3.85, 0.68, 1.1], [4.55, 0.8, 0.62]
+  ], { color: COL.cyan, r: 0.095, count: 16, psize: 0.09 });
+  // (b) 水泵增压出水 → 铝制水冷头进水口（右下角宝塔接头）
+  flows.wFeed = FlowLine([
+    [4.6, 1.98, 0.4], [4.5, 3.1, 0.45], [2.6, 4.05, 0.55], [0.2, 4.45, 0.5],
+    [-2.0, 4.55, 0.35], [-3.6, 4.05, 0.15], [-4.5, 3.5, 0]
+  ], { color: COL.cyan, r: 0.095, count: 26, psize: 0.095 });
+  // (c) 水冷头内部流道：右下进 → 左上出
+  flows.wHead = FlowLine([
+    [-4.74, 3.38, 0], [-6.4, 3.38, 0], [-8.06, 3.38, 0]
+  ], { color: COL.orange, r: 0.085, count: 10, psize: 0.085 });
+  // (d) 吸热后的热水 → 水箱高位回水口（背面走廊，与给水管不交叉）
+  flows.wRet = FlowLine([
+    [-8.06, 3.38, 0], [-8.45, 3.65, -0.7], [-7.9, 4.15, -1.4], [-5.8, 4.4, -1.6],
+    [-3.4, 4.35, -1.5], [-2.3, 4.2, -0.95], [-1.95, 4.05, -0.45]
+  ], { color: COL.orange, r: 0.095, count: 24, psize: 0.095 });
+
+  /* ===== ③ 控制信号（紫）：STM32 主控板 → 隔离驱动继电器 → 各执行器 ===== */
+  flows.sigBus = FlowLine([
+    [4.3, 1.0, -2.5], [5.4, 0.6, 0.6], [4.2, 0.5, 4.0], [1.2, 0.55, 5.1],
+    [-1.5, 0.8, 4.5], [-1.6, 1.05, 3.6]
+  ], { color: COL.signal, r: 0.035, count: 22, psize: 0.05 });
+  flows.sigCer = FlowLine([
+    [-1.75, 1.05, 3.35], [-3.2, 0.72, 2.5], [-4.8, 0.8, 1.4], [-6.3, 1.0, 0.85]
+  ], { color: COL.signal, r: 0.035, count: 10, psize: 0.05 });
+  flows.sigPump = FlowLine([
+    [-1.45, 1.05, 3.35], [0.7, 0.6, 2.4], [2.9, 0.55, 1.25], [4.45, 0.72, 0.62]
+  ], { color: COL.signal, r: 0.035, count: 12, psize: 0.05 });
+  flows.sigFan = FlowLine([
+    [-1.6, 1.18, 3.35], [-3.5, 0.95, 2.9], [-5.2, 1.25, 2.55], [-6.4, 1.62, 2.32]
+  ], { color: COL.signal, r: 0.035, count: 10, psize: 0.05 });
+
+  /* ===== ④ 传感器数据回传（绿）：多点位温度 / 液位 → 主控板 ===== */
+  flows.sensCer = FlowLine([
+    [-4.68, 3.02, 0.62], [-5.3, 2.5, -1.2], [-4.5, 0.85, -2.5], [-1.2, 0.62, -3.3],
+    [2.4, 0.7, -3.5], [4.55, 1.0, -3.15]
+  ], { color: 0x26e08a, r: 0.03, count: 20, psize: 0.045 });
+  flows.sensTank = FlowLine([
+    [-0.7, 3.25, 0.72], [-0.95, 2.5, -1.1], [-1.5, 1.0, -2.5], [1.2, 0.6, -4.5],
+    [4.5, 0.95, -3.6]
+  ], { color: 0x26e08a, r: 0.03, count: 18, psize: 0.045 });
+  // 液位保护联锁：水箱液位传感器 → 继电器（干烧保护专用回路）
+  flows.sigLv = FlowLine([
+    [-1.4, 1.35, 1.55], [-1.45, 1.2, 2.4], [-1.55, 1.1, 3.3]
+  ], { color: 0x26e08a, r: 0.028, count: 6, psize: 0.042 });
+
+  /* ===== ⑤ 12V 直流供电（琥珀）：12V/180W 电源适配器 → STM32 主控板 ===== */
+  flows.pwrBus = FlowLine([
+    [8.25, 0.9, -3.1], [7.5, 0.62, -3.1], [6.75, 0.85, -3.1]
+  ], { color: 0xffd24a, r: 0.055, count: 6, psize: 0.05 });
+}
+
+/* ============================================================================
+ * 4. 相机（自定义轨道控制 + 自动巡览）
+ * ========================================================================== */
+var cam = { theta: 0.62, phi: 1.14, dist: 26, target: new THREE.Vector3(-1.6, 2.2, 0) };
+var camW = { theta: 0.62, phi: 1.14, dist: 26, target: new THREE.Vector3(-1.6, 2.2, 0) };
+var dragging = false, lastX = 0, lastY = 0, idleT = 0, tourIdx = -1, tourT = 0;
+
+var TOUR = [
+  { id: 'ceramic', theta: -0.42, phi: 1.16, dist: 12.5, t: new THREE.Vector3(-6.4, 2.9, 0) },
+  { id: 'fins', theta: 0.30, phi: 1.02, dist: 12.0, t: new THREE.Vector3(-6.4, 1.7, 0) },
+  { id: 'fan', theta: -1.05, phi: 0.98, dist: 11.0, t: new THREE.Vector3(-6.4, 1.9, 1.4) },
+  { id: 'tank', theta: 1.15, phi: 1.10, dist: 11.5, t: new THREE.Vector3(-1.4, 2.3, 0) },
+  { id: 'pump', theta: 1.75, phi: 1.06, dist: 9.5, t: new THREE.Vector3(4.6, 1.4, 0.4) },
+  { id: 'relay', theta: 0.25, phi: 1.24, dist: 10.5, t: new THREE.Vector3(-1.6, 1.2, 2.6) },
+  { id: 'board', theta: 0.95, phi: 0.95, dist: 8.5, t: new THREE.Vector3(5.9, 1.5, -2.8) },
+  { id: 'psu', theta: 1.35, phi: 1.05, dist: 7.5, t: new THREE.Vector3(8.4, 1.1, -3.1) }
+];
+
+canvasEl.addEventListener('pointerdown', function (e) {
+  dragging = true; lastX = e.clientX; lastY = e.clientY; idleT = 0;
+  canvasEl.setPointerCapture(e.pointerId);
+});
+canvasEl.addEventListener('pointerup', function (e) {
+  dragging = false; idleT = 0;
+  try { canvasEl.releasePointerCapture(e.pointerId); } catch (x) {}
+});
+canvasEl.addEventListener('pointermove', function (e) {
+  idleT = 0; tourIdx = -1; // 用户介入 → 退出巡览聚焦
+  if (!dragging) return;
+  camW.theta -= (e.clientX - lastX) * 0.006;
+  camW.phi = clamp(camW.phi - (e.clientY - lastY) * 0.005, 0.18, 1.45);
+  lastX = e.clientX; lastY = e.clientY;
+});
+canvasEl.addEventListener('wheel', function (e) {
+  e.preventDefault(); idleT = 0; tourIdx = -1;
+  camW.dist = clamp(camW.dist + e.deltaY * 0.012, 8, 42);
+}, { passive: false });
+
+function updateCamera(dt) {
+  idleT += dt;
+  if (idleT > 12) {
+    // 空闲 12s 后自动巡览：逐个聚焦设备（12s 空闲即视为进入演示模式）
+    tourT += dt;
+    if (tourT > 9 || tourIdx < 0) {
+      tourT = 0; tourIdx = (tourIdx + 1) % TOUR.length;
+      var s = TOUR[tourIdx];
+      camW.theta = s.theta; camW.phi = s.phi; camW.dist = s.dist; camW.target.copy(s.t);
+      hoverLock = s.id;                       // 巡览期间锁定提示卡
+    }
+  } else {
+    // 用户介入 → 立即退出巡览并释放提示卡
+    if (tourIdx !== -1 || hoverLock) { tourIdx = -1; hoverLock = null; }
+  }
+  // 空闲缓慢自转
+  if (idleT > 3 && tourIdx < 0) camW.theta += dt * 0.035;
+
+  var k = clamp(dt * 2.2, 0, 1);
+  cam.theta = lerp(cam.theta, camW.theta, k);
+  cam.phi = lerp(cam.phi, camW.phi, k);
+  cam.dist = lerp(cam.dist, camW.dist, k);
+  cam.target.lerp(camW.target, k);
+
+  var sp = Math.sin(cam.phi), cp = Math.cos(cam.phi);
+  camera.position.set(
+    cam.target.x + cam.dist * sp * Math.sin(cam.theta),
+    cam.target.y + cam.dist * cp,
+    cam.target.z + cam.dist * sp * Math.cos(cam.theta)
+  );
+  camera.lookAt(cam.target);
+}
+
+/* ============================================================================
+ * 5. 组件信息定义（悬停 / 点击详情）
+ * ========================================================================== */
+var COMP_INFO = {
+  ceramic: {
+    name: TR('制冷陶瓷片 ×2 · TEC HEAT SOURCE'),
+    desc: TR('模拟空调压缩机的废热产生端：通电后持续释放低品位废热，经导热硅胶垫均匀贴合至铜导热板，向下传导至加热铝排、向上被铝制水冷头回收。'),
+    rows: function () {
+      return [
+        [TR('陶瓷片温度'), S.Tc.toFixed(1) + ' °C', S.Tc > 95 ? 'err' : (S.Tc > 80 ? 'hot' : '')],
+        [TR('等效发热功率'), (S.heatPct / 100 * 1.6).toFixed(2) + ' kW', ''],
+        [TR('供电状态'), S.actCer ? TR('12V 通电运行中') : (S.protect ? TR('保护断电') : TR('已停机')), S.actCer ? '' : 'err'],
+        [TR('风扇联动阈值'), TR('80.0 °C（回差 74 °C）'), ''],
+        [TR('均热措施'), TR('导热硅胶垫 + 铜导热板'), ''],
+        [TR('监测误差'), '≤ 0.5 °C', '']
+      ];
+    }
+  },
+  fins: {
+    name: TR('加热铝排 + 水冷头 · HEAT EXCHANGER'),
+    desc: TR('系统核心热交换器。13 片鳍片放大换热面积，顶面铜导热板承接陶瓷片废热；上方阳极氧化铝制水冷头构成闭式水循环的一次侧，将热量带入蓄热水箱。'),
+    rows: function () {
+      return [
+        [TR('铝排温度'), S.Tf.toFixed(1) + ' °C', S.Tf > 85 ? 'hot' : ''],
+        [TR('传热温差 Δ'), (S.Tf - S.Tw).toFixed(1) + ' °C', ''],
+        [TR('换热状态'), S.actPump ? TR('强制对流（水泵运行）') : TR('自然对流'), S.actPump ? '' : 'warn'],
+        [TR('鳍片数量 / 材质'), TR('13 片 / 6063-T5 铝合金'), ''],
+        [TR('水冷头流道'), TR('两端宝塔接头 + 卡箍'), '']
+      ];
+    }
+  },
+  tank: {
+    name: TR('储热水箱 · STORAGE TANK'),
+    desc: TR('容积 40L 保温水箱，储存回收得到的生活热水；水温、水位双参数实时监测，缺水时触发干烧保护。'),
+    rows: function () {
+      var danger = S.level < 20;
+      return [
+        [TR('水温'), S.Tw.toFixed(1) + ' °C', ''],
+        [TR('目标温度'), S.setpoint.toFixed(1) + ' °C', ''],
+        [TR('水位'), S.level.toFixed(1) + ' %', danger ? 'err' : ''],
+        [TR('有效水量'), (S.level / 100 * 40).toFixed(1) + ' L', ''],
+        [TR('导流板（二轮优化）'), S.baffle ? TR('已安装 · 无循环死角') : TR('未安装 · 存在死角'), S.baffle ? '' : 'err'],
+        [TR('状态'), danger ? TR('干烧保护！') : (S.Tw >= S.setpoint ? TR('已达设定温度') : TR('蓄热升温中')), danger ? 'err' : '']
+      ];
+    }
+  },
+  pump: {
+    name: TR('循环水泵 · CIRCULATION PUMP'),
+    desc: TR('驱动水箱与铝排之间的闭式水循环，强化对流换热；由温差阈值自动启停。'),
+    rows: function () {
+      return [
+        [TR('运行状态'), S.actPump ? TR('运行中') : TR('停止'), S.actPump ? '' : 'warn'],
+        [TR('启停判据 Δt'), (S.Tc - S.Tw).toFixed(1) + TR(' °C（阈值 5）'), ''],
+        [TR('响应耗时'), S.respMs + ' ms', ''],
+        [TR('额定流量 / 扬程'), '12 L/min / 3.5 m', ''],
+        [TR('功耗'), S.actPump ? '28.4 W' : TR('0.4 W（待机）'), '']
+      ];
+    }
+  },
+  fan: {
+    name: TR('散热风扇 ×2 · COOLING FAN'),
+    desc: TR('陶瓷片超温时强制风冷，防止热端过热失效；带 6°C 回差避免频繁启停。第二轮优化后风量随废热负载自适应提升。'),
+    rows: function () {
+      return [
+        [TR('运行状态'), S.actFan ? TR('运转 ×2') : TR('停止'), S.actFan ? '' : 'warn'],
+        [TR('启动阈值'), TR('80.0 °C（回差 74 °C）'), ''],
+        [TR('当前陶瓷片温度'), S.Tc.toFixed(1) + ' °C', S.Tc > 80 ? 'hot' : ''],
+        [TR('转速'), S.actFan ? '2180 rpm' : '0 rpm', ''],
+        [TR('高工况风扇优化'), S.fanOpt ? TR('已启用 · 负载自适应') : TR('未启用 · 散热不足'), S.fanOpt ? '' : 'warn'],
+        [TR('风量 / 噪声'), '62 CFM / 34 dB(A)', '']
+      ];
+    }
+  },
+  board: {
+    name: TR('STM32F103 主控板 · MCU'),
+    desc: TR('系统控制核心。板载多 IO 接口采集多点位温度与液位信号，运行滤波、换热判定、智能启停与安全保护算法，并通过 2.8 寸 TFT 彩屏与蜂鸣器实现本地可视化与报警。'),
+    rows: function () {
+      return [
+        [TR('运行状态'), S.systemOn ? TR('主循环运行中') : TR('待机'), S.systemOn ? '' : 'warn'],
+        [TR('控制模式'), S.auto ? TR('全自动') : TR('手动干预'), ''],
+        [TR('数据处理延迟'), S.latMs + ' ms（≤500ms）', ''],
+        [TR('TFT 显示内容'), TR('温度/水位/效率/能耗/产水量'), ''],
+        [TR('蜂鸣器'), S.alarm ? TR('声光报警中') : TR('就绪'), S.alarm ? 'err' : ''],
+        [TR('主控型号'), 'STM32F103 · Cortex-M3', '']
+      ];
+    }
+  },
+  psu: {
+    name: TR('12V / 180W 电源适配器 · PSU'),
+    desc: TR('为整个系统提供稳定直流供电：主控板逻辑电与继电器驱动电同源，执行层（陶瓷片、水泵、风扇）经隔离驱动继电器取电，实现强弱电分离。'),
+    rows: function () {
+      var load = (S.heatPct / 100 * 1.6).toFixed(2);
+      return [
+        [TR('输出规格'), 'DC 12V / 180W', ''],
+        [TR('供电状态'), S.systemOn ? TR('输出正常') : TR('空载待机'), ''],
+        [TR('当前等效负载'), load + TR(' kW 级热端'), ''],
+        [TR('用电侧隔离'), TR('2500 Vrms 光耦隔离'), ''],
+        [TR('今日等效产热水'), (S.hotWaterL).toFixed(0) + ' L', '']
+      ];
+    }
+  },
+  relay: {
+    name: TR('隔离驱动继电器 · ISO DRIVER'),
+    desc: TR('光耦隔离（≥2500Vrms），实现 STM32 弱电控制端与强电执行端的安全隔离与驱动放大。'),
+    rows: function () {
+      return [
+        [TR('驱动通道'), TR('4 路（泵/风扇/陶瓷片/备用）'), ''],
+        [TR('当前动作输出'), (S.actCer ? 'T1 ' : '') + (S.actPump ? 'T2 ' : '') + (S.actFan ? 'T3 ' : '') || TR('无输出'), ''],
+        [TR('隔离电压'), '2500 Vrms', ''],
+        [TR('控制指令延迟'), S.latMs + ' ms', ''],
+        [TR('触点寿命'), TR('≥ 10⁵ 次'), '']
+      ];
+    }
+  }
+};
+
+/* ============================================================================
+ * 6. 悬停 / 点击拾取
+ * ========================================================================== */
+var ray = new THREE.Raycaster(), mouse = new THREE.Vector2(-9, -9);
+var hoverId = null, hoverLock = null, clickLock = null, mouseIn = false;
+
+canvasEl.addEventListener('mousemove', function (e) {
+  var r = canvasEl.getBoundingClientRect();
+  mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  mouseIn = true; idleT = 0;
+});
+canvasEl.addEventListener('mouseleave', function () { mouseIn = false; hoverId = null; });
+canvasEl.addEventListener('click', function () {
+  if (hoverId) clickLock = (clickLock === hoverId) ? null : hoverId;
+  else clickLock = null;
+});
+
+function pickComponent() {
+  if (!mouseIn) return null;
+  ray.setFromCamera(mouse, camera);
+  var hits = ray.intersectObjects(pickables, false);
+  for (var i = 0; i < hits.length; i++) {
+    var cid = hits[i].object.userData.cid;
+    if (cid) return cid;
+  }
+  return null;
+}
+
+/* ============================================================================
+ * 7. 数据面板：数值平滑 + Canvas 曲线
+ * ========================================================================== */
+var numTween = new Map();
+function setNum(el, target, dec) {
+  var o = numTween.get(el);
+  if (!o) { o = { v: target }; numTween.set(el, o); }
+  o.v = lerp(o.v, target, 0.16);
+  if (Math.abs(o.v - target) < 0.005) o.v = target;
+  el.textContent = o.v.toFixed(dec);
+}
+
+function drawChart(cv, data, min, max, colorHex, thr, thrLabel) {
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  var w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  }
+  var g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  // 背景网格
+  g.strokeStyle = 'rgba(255,255,255,.055)'; g.lineWidth = 1;
+  for (var i = 1; i < 4; i++) {
+    var y = h / 4 * i; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+  }
+  // 阈值线
+  if (thr !== undefined) {
+    var ty = h - ((thr - min) / (max - min)) * h;
+    g.setLineDash([4, 4]); g.strokeStyle = 'rgba(255,107,53,.75)';
+    g.beginPath(); g.moveTo(0, ty); g.lineTo(w, ty); g.stroke(); g.setLineDash([]);
+    if (thrLabel) {
+      g.font = '9px Consolas,monospace'; g.fillStyle = 'rgba(255,107,53,.85)';
+      g.textAlign = 'left'; g.fillText(thrLabel, 3, ty - 3);
+    }
+  }
+  if (!data || data.length < 2) return;
+
+  var N = data.length, pts = [];
+  for (var k = 0; k < N; k++) {
+    var x = k / (N - 1) * w;
+    var yv = h - ((clamp(data[k], min, max) - min) / (max - min)) * h;
+    pts.push([x, yv]);
+  }
+  // 面积填充
+  var grad = g.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, colorHex.replace('rgb', 'rgba').replace(')', ',.30)'));
+  grad.addColorStop(1, colorHex.replace('rgb', 'rgba').replace(')', ',0)'));
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (var j = 1; j < pts.length; j++) g.lineTo(pts[j][0], pts[j][1]);
+  var solidHex = arguments[8] || colorHex.replace('rgb', 'rgba').replace(')', ',.30)');
+  g.lineTo(w, h); g.lineTo(0, h); g.closePath();
+  g.fillStyle = grad; g.fill();
+  // 曲线
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (var m = 1; m < pts.length; m++) g.lineTo(pts[m][0], pts[m][1]);
+  g.strokeStyle = colorHex; g.lineWidth = 1.8; g.shadowColor = colorHex; g.shadowBlur = 8; g.stroke();
+  g.shadowBlur = 0;
+}
+
+/* ============================================================================
+ * 8. UI 刷新（每帧更新数值插值，每 500ms 更新图表 / 状态文本）
+ * ========================================================================== */
+var $tTank = $('tTank'), $barTank = $('barTank'), $markTank = $('markTank'), $tagTank = $('tagTank'),
+  $cvTank = $('cvTank'), $tankRate = $('tankRate'),
+  $tCer = $('tCer'), $cvCer = $('cvCer'), $tagCer = $('tagCer'), $cerDiff = $('cerDiff'),
+  $tCold = $('tCold'), $barCold = $('barCold'), $tAmb = $('tAmb'), $coldDelta = $('coldDelta'),
+  $vLevel = $('vLevel'), $barLevel = $('barLevel'), $levelTxt = $('levelTxt'),
+  $vEff = $('vEff'), $barEff = $('barEff'), $badgeEff = $('badgeEff'), $vPower = $('vPower'), $effCmp = $('effCmp'),
+  $vResp = $('vResp'), $barResp = $('barResp'), $badgeResp = $('badgeResp'),
+  $vLat = $('vLat'), $barLat = $('barLat'), $badgeLat = $('badgeLat'),
+  $fMode = $('fMode'), $fHeat = $('fHeat'), $fMoney = $('fMoney'), $fUp = $('fUp'),
+  $lamp = $('lamp'), $lampTxt = $('lampTxt'), $bell = $('bell'), $alarm = $('alarm'), $alarmTxt = $('alarmTxt'),
+  $alarmBox = $('alarmBox'), $tip = $('tip');
+
+var lastUiWarn = '';
+
+function refreshUI() {
+  /* --- 1. 水箱温度 --- */
+  setNum($tTank, S.Tw, 1);
+  $barTank.style.width = clamp(S.Tw, 0, 100) + '%';
+  $markTank.style.left = clamp(S.setpoint, 0, 100) + '%';
+  if (S.protect) { $tagTank.className = 'tag err'; $tagTank.textContent = TR('保护停机'); }
+  else if (S.Tw >= S.setpoint) { $tagTank.className = 'tag ok'; $tagTank.textContent = TR('已达设定值'); }
+  else if (S.actPump) { $tagTank.className = 'tag run'; $tagTank.textContent = TR('循环换热中'); }
+  else { $tagTank.className = 'tag warn'; $tagTank.textContent = TR('保温静置'); }
+  var rate = (histTw.length > 2 ? (histTw[histTw.length - 1] - histTw[Math.max(0, histTw.length - 12)]) / 6 * 60 : 0);
+  $tankRate.textContent = (rate >= 0 ? '+' : '') + rate.toFixed(1) + ' °C/min';
+  drawChart($cvTank, histTw, 20, 90, 'rgb(0,212,255)');
+
+  /* --- 2. 陶瓷片温度 --- */
+  setNum($tCer, S.Tc, 1);
+  if (S.protect) { $tagCer.className = 'tag err'; $tagCer.textContent = TR('断电保护'); }
+  else if (S.actFan) { $tagCer.className = 'tag warn'; $tagCer.textContent = TR('强制风冷'); }
+  else if (S.actCer) { $tagCer.className = 'tag run'; $tagCer.textContent = TR('废热注入'); }
+  else { $tagCer.className = 'tag'; $tagCer.textContent = TR('停机'); }
+  $cerDiff.textContent = 'Δt ' + (S.Tc - S.Tw).toFixed(1) + ' °C';
+  drawChart($cvCer, histTc, 20, 120, 'rgb(255,107,53)', 80, 'FAN 80°C');
+
+  /* --- 3. 冷风温度 --- */
+  setNum($tCold, S.Tair, 1);
+  $barCold.style.width = clamp((S.Tamb - S.Tair) / 20 * 100, 0, 100) + '%';
+  $tAmb.textContent = S.Tamb.toFixed(1);
+  $coldDelta.textContent = 'Δ ' + (S.Tair - S.Tamb).toFixed(1);
+
+  /* --- 4. 水位 --- */
+  setNum($vLevel, S.level, 1);
+  $barLevel.style.height = clamp(S.level, 0, 100) + '%';
+  if (S.level < 20) { $barLevel.className = 'low'; }
+  else { $barLevel.className = ''; }
+  var liters = (S.level / 100 * 40).toFixed(1);
+  $levelTxt.textContent = S.protect ? TR('干烧保护 · 立即补水') : (S.level < 30 ? TR('水位偏低') : TR('正常 · 有效容积 ') + liters + ' L');
+
+  /* --- 5. 效率 --- */
+  setNum($vEff, S.eff, 1);
+  $barEff.style.width = clamp(S.eff, 0, 100) + '%';
+  var ok60 = S.eff >= 60;
+  // 优化开关全部打开时对齐二轮实测 65.2%；任一项关闭即回落至首轮标定区间
+  var degraded = !S.baffle || !S.fanOpt;
+  $badgeEff.className = 'tag ' + (ok60 ? 'ok' : 'err');
+  $badgeEff.textContent = ok60 ? TR('达标 ≥60%') : TR('未达标 <60%');
+  $effCmp.textContent = degraded ? TR('首轮工况 58.5% 未达标') : TR('优化后 65.2% 已达标');
+  $effCmp.style.color = degraded ? 'var(--err)' : 'var(--ok)';
+  setNum($vPower, S.__kw || 0, 2);
+
+  /* --- 6. 实时性 --- */
+  setNum($vResp, S.respMs, 0);
+  $barResp.style.width = clamp(S.respMs / 10, 0, 100) + '%';
+  var okR = S.respMs <= 1000;
+  $badgeResp.className = 'tag ' + (okR ? 'ok' : 'err');
+  $badgeResp.textContent = okR ? TR('达标 ≤1s') : TR('超标 >1s');
+  setNum($vLat, S.latMs, 0);
+  $barLat.style.width = clamp(S.latMs / 5, 0, 100) + '%';
+  var okL = S.latMs <= 500;
+  $badgeLat.className = 'tag ' + (okL ? 'ok' : 'err');
+  $badgeLat.textContent = okL ? TR('达标 ≤500ms') : TR('超标 >500ms');
+
+  /* --- 7. 设备状态矩阵 --- */
+  setDev('ledCer', 'stCer', S.actCer, S.protect ? ['err', TR('断电')] : [null, TR('通电运行')], S.systemOn);
+  setDev('ledPump', 'stPump', S.actPump, S.protect ? ['err', TR('断电')] : [null, TR('运行中')], S.systemOn);
+  setDev('ledFan', 'stFan', S.actFan, null, S.systemOn);
+  setDev('ledRel', 'stRel', S.systemOn, S.protect ? ['err', TR('保护')] : [null, TR('驱动就绪')], true);
+  setDev('ledMcu', 'stMcu', S.systemOn, S.protect ? ['err', TR('报警输出')] : [null, TR('主循环')], true);
+  setDev('ledPsu', 'stPsu', S.systemOn, S.systemOn ? [null, TR('输出正常')] : ['', TR('空载待机')], true);
+
+  /* --- 8. 顶部运行状态灯 --- */
+  var stClass = 'ok', stTxt = TR('系统正常');
+  if (S.protect) { stClass = 'err'; stTxt = TR('干烧故障 · 已停机'); }
+  else if (S.Tc > 100) { stClass = 'err'; stTxt = TR('陶瓷片超温'); }
+  else if (S.level < 30 || S.Tc > 90 || S.eff < 60) { stClass = 'warn'; stTxt = TR('运行预警'); }
+  else if (!S.systemOn) { stClass = 'warn'; stTxt = TR('系统待机'); }
+  if ($lamp.className !== 'lamp ' + stClass) $lamp.className = 'lamp ' + stClass;
+  $lampTxt.textContent = stTxt;
+
+  /* --- 9. 报警 --- */
+  if (S.alarm) {
+    $alarm.classList.add('show');
+    $bell.classList.add('on');
+    $alarmBox.classList.add('red');
+    $alarmTxt.textContent = TR('干烧保护触发：水位 ') + S.level.toFixed(1) + TR('% < 20%，循环水泵与制冷陶瓷片已断电，请补水后自动复位');
+  } else {
+    $alarm.classList.remove('show');
+    $bell.classList.remove('on');
+    $alarmBox.classList.remove('red');
+  }
+
+  /* --- 10. 底部状态栏 + 提示卡内容（500ms） --- */
+  refreshTip();
+  $fMode.textContent = S.systemOn ? (S.auto ? TR('自动') : TR('手动')) : TR('停机');
+  setNum($fHeat, S.heatKWh, 2);
+  setNum($fMoney, S.money, 2);
+  var hh = Math.floor(S.upSec / 3600), mm = Math.floor((S.upSec % 3600) / 60);
+  $fUp.textContent = hh + 'h ' + pad2(mm) + 'm';
+}
+
+function setDev(ledId, stId, on, pair, sysOn) {
+  var led = $(ledId), st = $(stId);
+  if (pair) {
+    led.className = 'led ' + (pair[0] || (sysOn ? 'on' : ''));
+    st.className = 'st ' + (pair[0] || '');
+    st.textContent = pair[1];
+  } else if (on) {
+    led.className = 'led run'; st.className = 'st on'; st.textContent = TR('运行中');
+  } else {
+    led.className = 'led'; st.className = 'st'; st.textContent = TR('停止');
+  }
+}
+
+/* ============================================================================
+ * 9. 交互控件绑定
+ * ========================================================================== */
+var $btnPower = $('btnPower'), $btnAuto = $('btnAuto'), $btnPump = $('btnPump'), $btnFan = $('btnFan'),
+  $btnWater = $('btnWater'), $btnDry = $('btnDry'), $sHeat = $('sHeat'), $sSet = $('sSet'),
+  $vHeat = $('vHeat'), $vSet = $('vSet'),
+  $btnBaffle = $('btnBaffle'), $btnFanOpt = $('btnFanOpt');
+
+$sHeat.addEventListener('input', function () {
+  S.heatPct = +this.value;
+  $vHeat.textContent = S.heatPct + '%';
+});
+$sSet.addEventListener('input', function () {
+  S.setpoint = +this.value;
+  $vSet.textContent = S.setpoint.toFixed(1) + ' °C';
+});
+$btnPower.addEventListener('click', function () {
+  S.systemOn = !S.systemOn;
+  this.className = S.systemOn ? 'btn primary' : 'btn off';
+  this.textContent = S.systemOn ? TR('■ 停止运行') : TR('▶ 启动运行');
+});
+$btnAuto.addEventListener('click', function () {
+  S.auto = !S.auto;
+  this.className = S.auto ? 'btn active' : 'btn';
+  this.textContent = S.auto ? TR('自动模式') : TR('手动模式');
+  $btnPump.disabled = S.auto; $btnFan.disabled = S.auto;
+  if (S.auto) {
+    $btnPump.classList.remove('active'); $btnFan.classList.remove('active');
+  } else {
+    // 手动模式：接管当前执行状态作为初始值
+    S.cmdPump = S.actPump; S.cmdFan = S.actFan;
+    syncManualBtns();
+  }
+});
+$btnPump.addEventListener('click', function () { S.cmdPump = !S.cmdPump; syncManualBtns(); });
+$btnFan.addEventListener('click', function () { S.cmdFan = !S.cmdFan; syncManualBtns(); });
+function syncManualBtns() {
+  $btnPump.classList.toggle('active', !!S.cmdPump);
+  $btnFan.classList.toggle('active', !!S.cmdFan);
+}
+
+/* ---------- 中 / 英 双语切换 ---------- */
+var $langSw = $('langSw');
+function syncCtrlLabels() {
+  $btnPower.textContent = S.systemOn ? TR('■ 停止运行') : TR('▶ 启动运行');
+  $btnAuto.textContent = S.auto ? TR('自动模式') : TR('手动模式');
+}
+function setLang(lang) {
+  if (lang !== 'zh' && lang !== 'en') return;
+  LANG = lang;
+  try { localStorage.setItem('whr.lang', lang); } catch (e) { }
+  var btns = ($langSw && $langSw.getElementsByTagName) ? $langSw.getElementsByTagName('button') : [];
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].className = (btns[i].getAttribute('data-lang') === lang) ? 'on' : '';
+  }
+  try {
+    document.title = TR('智能空调废热回收节能系统 · 数字孪生仿真实验台');
+    document.documentElement.lang = (lang === 'zh' ? 'zh-CN' : 'en-US');
+  } catch (e) { }
+  applyStatic($('app'));            // 静态文案
+  applyStatic(bootEl);
+  syncCtrlLabels();                 // 按钮文案
+  try { syncHandleTitles(); } catch (e) { }   // 收起/展开手柄提示
+  try { refreshUI(); } catch (e) { }
+  try { drawTFT(); } catch (e) { }  // 3D 主控板屏幕
+  try { updateClock(); } catch (e) { }
+  if ($tip) $tip.dataset.id = '';   // 强制重建悬停提示卡
+}
+if ($langSw) {
+  $langSw.addEventListener('click', function (e) {
+    var b = e.target || e.srcElement;
+    while (b && b !== this && b.tagName !== 'BUTTON') b = b.parentNode;
+    if (!b || b.tagName !== 'BUTTON') return;
+    setLang(b.getAttribute('data-lang'));
+  });
+}
+setLang(LANG);                      // 应用上次选择的语言（默认中文）
+
+/* ---------- 左右侧栏 收起 / 展开（突出中间 3D） ---------- */
+var $mainEl = $('main'), $hudT = $('hudToggle'), $panelT = $('panelToggle');
+var hudOff = false, panelOff = false;
+try {
+  hudOff = localStorage.getItem('whr.hud') === '1';
+  panelOff = localStorage.getItem('whr.panel') === '1';
+} catch (e) { }
+
+function nowMs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+
+/* 宽度过渡期间持续校正 WebGL 画布尺寸，避免 3D 被拉伸或留黑边 */
+function layoutPulse(ms) {
+  var end = nowMs() + (ms || 520);
+  (function tick() {
+    try { updateLayout(); } catch (e) { }
+    if (nowMs() < end) requestAnimationFrame(tick);
+  })();
+}
+function setTit(el, txt) { if (el) { el.setAttribute('title', txt); el.setAttribute('aria-label', txt); } }
+function syncHandleTitles() {
+  setTit($hudT, hudOff ? TR('展开左侧浮层') : TR('收起左侧浮层'));
+  setTit($panelT, panelOff ? TR('展开右侧面板') : TR('收起右侧面板'));
+}
+function applyCollapse(pulse) {
+  if (stageEl) stageEl.classList.toggle('hud-off', hudOff);
+  if ($mainEl) $mainEl.classList.toggle('panel-off', panelOff);
+  syncHandleTitles();
+  if (pulse !== false) layoutPulse(520);
+}
+function toggleHud(force) {
+  hudOff = (force === undefined) ? !hudOff : !!force;
+  try { localStorage.setItem('whr.hud', hudOff ? '1' : '0'); } catch (e) { }
+  applyCollapse();
+}
+function togglePanel(force) {
+  panelOff = (force === undefined) ? !panelOff : !!force;
+  try { localStorage.setItem('whr.panel', panelOff ? '1' : '0'); } catch (e) { }
+  applyCollapse();
+}
+if ($hudT) $hudT.addEventListener('click', function () { toggleHud(); });
+if ($panelT) $panelT.addEventListener('click', function () { togglePanel(); });
+applyCollapse(false);
+
+$btnWater.addEventListener('click', function () { S.level = clamp(S.level + 45, 0, 100); });
+$btnDry.addEventListener('click', function () { S.level = Math.min(S.level, 19.5); });
+
+// 第二轮优化整改项开关：关闭可复现 2026-01-15 首轮测试工况
+$btnBaffle.addEventListener('click', function () {
+  S.baffle = !S.baffle;
+  this.className = S.baffle ? 'btn active' : 'btn ghost';
+});
+$btnFanOpt.addEventListener('click', function () {
+  S.fanOpt = !S.fanOpt;
+  this.className = S.fanOpt ? 'btn active' : 'btn ghost';
+});
+
+// 快捷键：空格启停
+window.addEventListener('keydown', function (e) {
+if (e.code === 'Space') { e.preventDefault(); $btnPower.click(); }
+// [ 收起/展开左侧浮层；] 收起/展开右侧数据面板
+if (e.key === '[') { e.preventDefault(); toggleHud(); }
+if (e.key === ']') { e.preventDefault(); togglePanel(); }
+});
+
+/* ============================================================================
+ * 10. 主循环
+ * ========================================================================== */
+var clockAcc = 0, spinP = 0, spinF = 0, lastT = performance.now(), loopErrShown = false;
+
+function updateClock() {
+  var d = new Date();
+  $('clkTime').textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  var wk = [TR('日'), TR('一'), TR('二'), TR('三'), TR('四'), TR('五'), TR('六')][d.getDay()];
+  $('clkDate').textContent = d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) + TR(' 周') + wk;
+}
+
+function updateVisual(dt) {
+  /* --- 铝排：银灰 → 橙红 --- */
+  var hf = clamp((S.Tf - 30) / 70, 0, 1);
+  matFin.color.setRGB(lerp(0.72, 1.0, hf), lerp(0.77, 0.36, hf), lerp(0.80, 0.14, hf));
+  matFin.emissive.setRGB(hf * 0.85, hf * hf * 0.30, 0.02);
+  matFin.emissiveIntensity = hf * 1.1;
+  lightHeat.intensity = 0.3 + hf * 1.6;
+  lightHeat.color.setRGB(1, lerp(0.75, 0.35, hf), lerp(0.55, 0.1, hf));
+
+  /* --- 陶瓷片：热源色晕随温度由琥珀转赤红（这里是「废热产生端」，非冷端） --- */
+  var hc = clamp((S.Tc - 30) / 70, 0, 1);
+  for (var gi = 0; gi < cerGlows.length; gi++) {
+    var gsp = cerGlows[gi];
+    gsp.material.color.setRGB(1, lerp(0.72, 0.18, hc), lerp(0.32, 0.06, hc));
+    gsp.material.opacity = 0.16 + hc * 0.60;
+    gsp.scale.setScalar(2.5 + hc * 1.9);
+  }
+  matCerTop.emissive.setRGB(hc * 0.95, hc * hc * 0.32, 0.02);
+  matCerTop.emissiveIntensity = 0.4 + hc * 1.5;
+  // 铜导热板 / 铝制水冷头随一次侧水温着色
+  matCopper.emissive.setRGB(hc * 0.45, hc * hc * 0.14, 0.0);
+  matCopper.emissiveIntensity = 0.3 + hc * 0.9;
+  var hhx = clamp((S.Tf - 30) / 70, 0, 1);
+  matHead.emissive.setRGB(0.02, lerp(0.10, 0.26, hhx), lerp(0.30, 0.52, hhx));
+  matHead.emissiveIntensity = 0.35 + hhx * 0.85;
+  lightAlarm.intensity = S.alarm ? (0.8 + Math.sin(nowSec * 8) * 0.6) : 0;
+
+  /* --- 第二轮优化①：导流板 / 循环死角显隐 --- */
+  if (baffleMesh) baffleMesh.visible = S.baffle;
+  if (deadZones) {
+    deadZones.visible = !S.baffle;
+    if (!S.baffle) {
+      var pulseDz = 0.35 + 0.22 * Math.sin(nowSec * 1.6);
+      for (var dz = 0; dz < deadZones.children.length; dz++) {
+        deadZones.children[dz].material.opacity = pulseDz;
+      }
+    }
+  }
+
+  /* --- 水体：水位 + 深蓝→浅蓝 --- */
+  var lv = clamp(S.level, 0, 100) / 100;
+  meshWater.scale.y = Math.max(0.02, lv * waterMaxH);
+  comps.tank.userData.surf.position.y = waterBaseY + lv * waterMaxH + 0.01;
+  var hw = clamp((S.Tw - 20) / 60, 0, 1);
+  matWater.color.setRGB(lerp(0.04, 0.20, hw), lerp(0.31, 0.66, hw), lerp(0.66, 1.0, hw));
+  matWater.emissive.setRGB(hw * 0.05, hw * 0.18, hw * 0.42);
+  matWater.opacity = S.protect ? 0.45 : 0.78;
+
+  /* --- 旋转动画：水泵叶轮 / 双风扇叶轮 --- */
+  spinP += dt * (S.actPump ? 18 : 0);
+  rotorPump.rotation.y = spinP;
+  spinF += dt * (S.actFan ? 22 : 0);
+  for (var fi = 0; fi < fanRotors.length; fi++) fanRotors[fi].rotation.z = spinF;
+
+  /* --- 主控板：电源 LED + 蜂鸣器报警 --- */
+  if (ledPower) ledPower.material.color.setHex(S.protect ? 0xff2020 : (S.systemOn ? 0x26e08a : 0x555f6b));
+  if (buzzerHalo) {
+    if (S.alarm) {
+      var bz = (Math.sin(nowSec * 10) + 1) / 2;
+      buzzerHalo.material.opacity = 0.15 + bz * 0.75;
+      buzzerHalo.scale.setScalar(0.7 + bz * 0.5);
+      buzzerMesh.material.emissive.setRGB(0.55 + bz * 0.4, 0, 0);
+      buzzerMesh.material.emissiveIntensity = 1;
+    } else {
+      buzzerHalo.material.opacity = 0;
+      buzzerMesh.material.emissive.setRGB(0, 0, 0);
+    }
+  }
+
+  /* --- 继电器指示灯 --- */
+  if (ledRel) {
+    var blink = S.alarm ? (Math.sin(nowSec * 10) > 0) : true;
+    ledRel.material.color.setHex(S.protect ? 0xff2020 : (S.systemOn ? 0x26e08a : 0x555f6b));
+    ledRel.visible = blink || !S.alarm;
+    comps.relay.userData.halo.material.opacity = S.alarm ? (Math.sin(nowSec * 10) > 0 ? 0.9 : 0.1) : 0.55;
+    comps.relay.userData.halo.material.color.setHex(S.protect ? 0xff2020 : (S.systemOn ? 0x26e08a : 0x555f6b));
+  }
+
+  /* --- 流动管线 --- */
+  var heatMix = clamp((S.Tf - 30) / 60, 0, 1);
+  var condOn = S.actCer && (S.Tc - S.Tf) > 0.4;
+  flows.cond1.update(dt, condOn, 0.15 + heatMix * 0.12, 0xffb020, 0xff3a0a, heatMix);
+  flows.cond2.update(dt, condOn, 0.15 + heatMix * 0.12, 0xffb020, 0xff3a0a, heatMix);
+  flows.cond3.update(dt, condOn, 0.15 + heatMix * 0.12, 0xffb020, 0xff3a0a, heatMix);
+
+  var pumpActive = S.actPump ? 1 : 0;
+  var hotMix = clamp((S.Tw - 25) / 45, 0, 1);       // 水温越高，回水管越偏橙
+  var waterSpeed = S.actPump ? 0.28 : 0;
+  flows.wSup.update(dt, pumpActive, waterSpeed, 0x00d4ff, 0x2fd8ff, 0);
+  flows.wFeed.update(dt, pumpActive, waterSpeed, 0x00d4ff, 0x40e0ff, 0);
+  flows.wHead.update(dt, pumpActive, waterSpeed * 1.2, 0x26e08a, 0xff6b35, hotMix);
+  flows.wRet.update(dt, pumpActive, waterSpeed, 0xffc266, 0xff6b35, hotMix);
+
+  // 控制指令：MCU → 继电器 → 执行器（继电器得电即视为总线活跃）
+  var busOn = S.systemOn ? 1 : 0;
+  flows.sigBus.update(dt, busOn, 0.42, 0xa86bff, 0xc9a0ff, 0.2);
+  flows.sigCer.update(dt, S.actCer, 0.38, 0xa86bff, 0xff6b35, 0.35);
+  flows.sigPump.update(dt, S.actPump, 0.38, 0xa86bff, 0x00d4ff, 0.35);
+  flows.sigFan.update(dt, S.actFan, 0.38, 0xa86bff, 0x00d4ff, 0.35);
+
+  // 传感器数据回传（多点位温度 / 液位）
+  var sensOn = S.systemOn ? 1 : 0;
+  flows.sensCer.update(dt, sensOn, 0.30, 0x26e08a, 0x7cffb0, 0.25);
+  flows.sensTank.update(dt, sensOn, 0.30, 0x26e08a, 0x7cffb0, 0.25);
+  flows.sigLv.update(dt, sensOn, 0.26, 0x26e08a, S.protect ? 0xff4d4f : 0x26e08a, S.protect ? 1 : 0);
+
+  // 12V 直流供电总线
+  flows.pwrBus.update(dt, busOn, 0.22, 0xffd24a, 0xffe08a, 0.2);
+
+  /* --- 选中/悬停指示环 --- */
+  var focusId = clickLock || hoverLock || hoverId;
+  if (focusId && anchor[focusId]) {
+    selectionRing.visible = true;
+    var a = anchor[focusId];
+    selectionRing.position.set(a.x, 0.36, a.z);
+    selectionRing.rotation.z += dt * 0.8;
+    var pulse = 1 + Math.sin(nowSec * 3) * 0.05;
+    var ringScale = { fan: 0.78, psu: 0.8, board: 1.0, relay: 0.7, pump: 0.72 }[focusId] || 1;
+    selectionRing.scale.setScalar(pulse * ringScale);
+    selectionRing.material.color.setHex(
+      (focusId === 'ceramic' || focusId === 'fins') ? 0xff6b35 :
+        (focusId === 'board' || focusId === 'psu') ? 0xa86bff : 0x00d4ff);
+  } else {
+    selectionRing.visible = false;
+  }
+
+  /* --- 标签数值 / 板载 TFT 画面（500ms 刷新） --- */
+  labelAcc += dt;
+  if (labelAcc > 0.5) {
+    labelAcc = 0;
+    drawLabel('ceramic', TR('制冷陶瓷片 ×2'), S.Tc.toFixed(1) + ' °C', S.Tc > 90 ? '#ff7b52' : '#ffd0b6');
+    drawLabel('fins', TR('加热铝排 / 水冷头'), S.Tf.toFixed(1) + ' °C', S.Tf > 70 ? '#ff9a5c' : '#cfe6f5');
+    drawLabel('tank', TR('储热水箱 40L'), S.Tw.toFixed(1) + ' °C · ' + S.level.toFixed(0) + '%',
+      S.level < 20 ? '#ff4d4f' : '#9fe8ff');
+    drawLabel('pump', TR('循环水泵'), S.actPump ? TR('运转 · Δt ') + (S.Tc - S.Tw).toFixed(1) : TR('停止'),
+      S.actPump ? '#00d4ff' : '#7c93a8');
+    drawLabel('fan', TR('散热风扇 ×2'), S.actFan ? TR('运转 2180rpm') : TR('待命 <80°C'), S.actFan ? '#26e08a' : '#7c93a8');
+    drawLabel('relay', TR('隔离驱动继电器'), S.protect ? TR('保护断开') : (S.systemOn ? TR('驱动就绪') : TR('待机')),
+      S.protect ? '#ff4d4f' : '#c9a0ff');
+    drawLabel('board', TR('STM32F103 主控'), S.protect ? TR('报警输出') : (S.systemOn ? TR('运行 ') + S.latMs + 'ms' : TR('待机')),
+      S.protect ? '#ff4d4f' : '#7fe4ff');
+    drawLabel('psu', TR('12V / 180W 电源'), S.systemOn ? TR('输出正常') : TR('空载待机'), S.systemOn ? '#ffd24a' : '#7c93a8');
+    drawTFT();
+  }
+
+  /* --- 提示卡定位 --- */
+  updateTip(focusId);
+}
+var labelAcc = 0, lastFocus = null;
+
+/* --- 板载 2.8" TFT 彩屏：实时工况 + 能耗 / 产水量统计（第二轮细节优化新增） --- */
+function drawTFT() {
+  if (!tftCtx) return;
+  var c = tftCtx, W = 320, H = 240;
+  c.fillStyle = S.protect ? '#2a0a0c' : '#04121b'; c.fillRect(0, 0, W, H);
+
+  // 顶部状态条
+  c.fillStyle = S.protect ? '#7a1418' : (S.systemOn ? '#06384a' : '#1a2530');
+  c.fillRect(0, 0, W, 30);
+  c.fillStyle = S.protect ? '#ff8a8c' : '#9ff0ff';
+  c.font = 'bold 17px Consolas,monospace'; c.textAlign = 'left';
+  c.fillText(S.protect ? TR('ALARM 干烧保护') : (S.systemOn ? (S.auto ? TR('AUTO 运行中') : TR('MANUAL 手动')) : 'STANDBY'), 8, 21);
+  c.textAlign = 'right';
+  c.fillStyle = '#7fe4ff'; c.font = '13px Consolas,monospace';
+  c.fillText(S.latMs + 'ms', W - 8, 21);
+
+  // 三路温度
+  var rows = [
+    [TR('水温 TANK'), S.Tw, '#00d4ff', 90],
+    [TR('陶瓷 TEC'), S.Tc, '#ff6b35', 100],
+    [TR('冷风 AIR'), S.Tair, '#26e08a', 50]
+  ];
+  c.textAlign = 'left';
+  for (var i = 0; i < rows.length; i++) {
+    var y = 52 + i * 34, r = rows[i];
+    c.fillStyle = '#7c93a8'; c.font = CNFONT(13, false);
+    c.fillText(r[0], 10, y);
+    c.fillStyle = r[2]; c.font = 'bold 20px Consolas,monospace'; c.textAlign = 'right';
+    c.fillText(r[1].toFixed(1) + 'C', 150, y);
+    // 迷你条形
+    var bw = clamp(r[1] / r[3], 0, 1) * 140;
+    c.fillStyle = 'rgba(255,255,255,.09)'; c.fillRect(160, y - 13, 150, 13);
+    c.fillStyle = r[2]; c.fillRect(160, y - 13, bw, 13);
+    c.textAlign = 'left';
+  }
+
+  // 水位 + 效率
+  c.fillStyle = '#7c93a8'; c.font = CNFONT(13, false);
+  c.fillText(TR('水位 LEVEL'), 10, 165);
+  c.fillStyle = S.level < 20 ? '#ff4d4f' : '#7fe4ff'; c.font = 'bold 16px Consolas,monospace';
+  c.fillText(S.level.toFixed(0) + '%', 110, 165);
+  c.fillStyle = '#7c93a8'; c.font = CNFONT(13, false);
+  c.fillText(TR('回收效率 ETA'), 10, 189);
+  c.fillStyle = S.eff >= 60 ? '#26e08a' : '#ffb020'; c.font = 'bold 16px Consolas,monospace';
+  c.fillText(S.eff.toFixed(1) + '%', 110, 189);
+
+  c.fillStyle = 'rgba(255,255,255,.09)'; c.fillRect(160, 155, 150, 12);
+  c.fillStyle = S.level < 20 ? '#ff4d4f' : '#00d4ff'; c.fillRect(160, 155, clamp(S.level, 0, 100) / 100 * 150, 12);
+  c.fillStyle = 'rgba(255,255,255,.09)'; c.fillRect(160, 179, 150, 12);
+  c.fillStyle = S.eff >= 60 ? '#26e08a' : '#ffb020'; c.fillRect(160, 179, clamp(S.eff, 0, 100) / 100 * 150, 12);
+
+  // 底部：能耗 + 产水量统计
+  c.fillStyle = '#062330'; c.fillRect(0, 202, W, 38);
+  c.fillStyle = '#7c93a8'; c.font = CNFONT(11, false);
+  c.fillText(TR('累计回收'), 10, 218); c.fillText(TR('节省电费'), 120, 218); c.fillText(TR('产热水'), 232, 218);
+  c.font = 'bold 15px Consolas,monospace'; c.fillStyle = '#ffd24a';
+  c.fillText(S.heatKWh.toFixed(2) + 'kWh', 10, 234);
+  c.fillStyle = '#26e08a';
+  c.fillText('¥' + S.money.toFixed(2), 120, 234);
+  c.fillStyle = '#00d4ff';
+  c.fillText(S.hotWaterL.toFixed(0) + 'L', 232, 234);
+
+  if (tftTex) tftTex.needsUpdate = true;
+}
+
+/* --- 提示卡：内容渲染（500ms / 焦点切换时触发） --- */
+function renderTip(focusId) {
+  if (!focusId || !COMP_INFO[focusId]) return;
+  var info = COMP_INFO[focusId], rows = info.rows();
+  var html = '<h4><span class="bar3"></span>' + info.name + '</h4><div class="desc">' + info.desc + '</div>';
+  for (var i = 0; i < rows.length; i++) {
+    html += '<div class="kv"><span>' + rows[i][0] + '</span><b class="' + rows[i][2] + '">' + rows[i][1] + '</b></div>';
+  }
+  $tip.innerHTML = html;
+}
+function refreshTip() { renderTip(lastFocus); }
+
+/* --- 提示卡：跟随组件世界坐标定位（每帧） --- */
+function updateTip(focusId) {
+  lastFocus = focusId;
+  if (!focusId || !anchor[focusId] || !COMP_INFO[focusId]) {
+    $tip.classList.remove('show'); return;
+  }
+  if ($tip.dataset.id !== focusId) {          // 焦点切换时立即重建内容
+    $tip.dataset.id = focusId; renderTip(focusId);
+  }
+  var v = anchor[focusId].clone().project(camera);
+  var w = stageEl.clientWidth, h = stageEl.clientHeight;
+  var x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
+  $tip.classList.add('show');
+  var tw = $tip.offsetWidth, th = $tip.offsetHeight;
+  var px = clamp(x + 16, 8, Math.max(8, w - tw - 8));
+  var py = clamp(y - th / 2, 60, Math.max(60, h - th - 8));
+  $tip.style.left = px + 'px';
+  $tip.style.top = py + 'px';
+}
+
+function updateLayout() {
+  var w = stageEl.clientWidth, h = stageEl.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h);
+  camera.updateProjectionMatrix();
+}
+
+function loop(t) {
+  /* 首帧 rAF 时间戳可能早于 lastT（在帧处理中段注册回调），此处必须夹紧，
+     否则 dt 为负 → 管线采样参数 t 为负 → CatmullRomCurve3 内部取点越界抛异常，
+     整个渲染循环中断（表现：3D 画面全黑）。 */
+  var dt = clamp((t - lastT) / 1000, 0, 0.05);
+  lastT = t;
+  if (!isFinite(dt)) dt = 0;
+
+  // 定步长物理积分
+  var remain = dt, hStep = 1 / 60, guard = 0;
+  while (remain > 0 && guard++ < 8) {
+    var hs = Math.min(remain, hStep);
+    stepSim(hs);
+    remain -= hs;
+  }
+
+  updateCamera(dt);
+  try {
+    updateVisual(dt);
+
+    uiAcc += dt;
+    if (uiAcc >= UI_TICK) { uiAcc = 0; refreshUI(); }
+
+    clockAcc += dt;
+    if (clockAcc >= 1) { clockAcc = 0; updateClock(); }
+
+    // 拾取（每帧节流）
+    hoverId = pickComponent();
+
+    renderer.render(scene, camera);
+  } catch (err) {
+    /* 单帧异常不允许中断整个动画循环，否则画面会永久黑屏 */
+    if (!loopErrShown) { loopErrShown = true; try { console.error(TR('[渲染循环异常]'), err); } catch (x) { } }
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ============================================================================
+ * 11. 启动
+ * ========================================================================== */
+updateClock();
+applyStatic($('app'));
+applyStatic(bootEl);
+refreshUI();
+updateLayout();
+requestAnimationFrame(loop);
+
+// 隐藏加载遮罩
+setTimeout(function () { bootEl.classList.add('hide'); }, 400);
+setTimeout(function () { bootEl.style.display = 'none'; }, 1200);
+
+})();
+</script>
+</body>
+</html>
